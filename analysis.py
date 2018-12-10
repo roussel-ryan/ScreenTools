@@ -35,6 +35,19 @@ def get_2D_gauss_fit(filename,image_number=0):
         return fit
 
 def get_array_moments(array):
+    '''
+    raw calcuation of moments of a 2D histogram array
+    
+    Inputs
+    ------
+    array       2D np.ndarray giving an image (histogram) of a distribution
+                Note: used in analysis.calc_moments fucntion
+    Outputs
+    -------
+    moments     list(<x>,<y>,<xy>,sqrt(<x^2> - <x>^2),sqrt(<y^2> - <y>^2))
+
+    '''
+
     T = np.sum(array)
     n,m = array.shape
     
@@ -55,6 +68,19 @@ def get_array_moments(array):
     return (exp_x,exp_y,exp_xy,np.sqrt(exp_x2),np.sqrt(exp_y2))
       
 def calc_moments(filename):
+    '''
+    calculate statistical moments for each frame and for the entire file
+    results are set as attributes of each image group and in the file attrs
+
+    Inputs
+    ------
+    filename    h5 file with image data
+
+    Outputs
+    -------
+    filename    h5 file with image data and results
+    '''
+    
     stat_data = []
     with h5py.File(filename) as f:
         for i in range(f.attrs['nframes']-1):
@@ -71,9 +97,24 @@ def calc_moments(filename):
     logging.debug(stats)
     with h5py.File(filename,'r+') as f:
         f.attrs['moments_stats'] = stats
+
+    return filename
         
 
 def get_lineout(filename,image_number=0,axis=0,normalize=False,dataset='/img'):
+    '''
+    calculate the lineout (projection) of a given axis from file
+    
+    Inputs
+    ------
+    filename      h5 file with image data
+    image_number  frame number in file
+    axis          0 for horizontal axis,1 for vertical axis
+    normalize     normalizes output so area = 1, defualt=False
+    dataset       dataset for image (either /img or /raw)
+    '''
+
+    
     with h5py.File(filename,'r') as f:
         data = f['/{}{}'.format(image_number,dataset)][:]
         lineout = np.sum(data,axis=axis)

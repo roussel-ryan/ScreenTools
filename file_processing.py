@@ -19,8 +19,9 @@ def process_folder(path,same_screen=False,**kwargs):
     - converts files from dat format to h5 format
     - prompts user to select points on screen image to get screen coordinates
     
-    OPTIONS:
-    --------
+    INPUTS:
+    -------
+    path                            folder path
     same_screen = False             specify if ALL files are on the same screen
                                     will only screen find the first file and add
                                     same screen attrs to each file in folder
@@ -65,6 +66,14 @@ def process_folder(path,same_screen=False,**kwargs):
     return h5_files
 
 def add_current(h5filename):
+    '''
+    adds current distribution from LeCroy to each image group
+
+    Inputs:
+    -------
+    h5filename      h5 filename which contains image data
+
+    '''
     
     fbase = h5filename.split('_img')[0].split('.')[0]
     if isfile(fbase + 'LeCroy.sdds'):
@@ -102,8 +111,9 @@ def add_current(h5filename):
                 f.create_dataset('/{}/current'.format(i),data=dset.T)
         except RuntimeError:
             logging.error('File {} already has current data!'.format(h5filename))
-
-def convert_to_h5(filename,header_size=6,order_type='C'):
+    return h5filename
+            
+def convert_to_h5(filename):
     ''' import image data into h5 format for more efficient computing'''
     logging.info('reading data from file: {}'.format(filename))
     data    = np.fromfile(filename, dtype=np.uint16)
@@ -111,22 +121,22 @@ def convert_to_h5(filename,header_size=6,order_type='C'):
     dy = int(data[0])
 
     logging.debug((dx,dy,data[:7]))
-    
-    if header_size==6:
+
+    #header size is either six or three
+    try:
+        header_size = 6
         nframes = int(data[2])+1
         length  = dx*dy*nframes   
         n = header_size# + 1 
         images  = data[n:]
-    else:
+        nimages = np.reshape(images,(-1, dx, dy), order='C')
+    except ValueError:
+        header_size = 3
         nframes = int(data[2])
         length  = dx*dy*nframes   
         n = header_size + 1 
         images  = data[n:]
-
-    logging.debug(images.shape)
-        
-    nimages = np.reshape(images,(-1, dx, dy), order=order_type)
-    #logging.debug(nimages.shape)
+        nimages = np.reshape(images,(-1, dx, dy), order='C')
     
     #now send all the images to preallocated datasets
     with h5py.File('{}.h5'.format(filename.split('.')[0]),'w') as f:
@@ -144,7 +154,7 @@ def convert_to_h5(filename,header_size=6,order_type='C'):
     logging.info('Done importing')    
     return None 
 
-def process_raw(filename,overwrite=False,skip_screen_finder=False,suppress_warning = False,header_size = 6):
+def process_raw(filename,overwrite=False,skip_screen_finder=False,suppress_warning = False):
     if not filename.split('.')[1] == 'dat':
         logging.error('filename {} not .dat file!'.format(filename))
         return None
@@ -154,7 +164,7 @@ def process_raw(filename,overwrite=False,skip_screen_finder=False,suppress_warni
         if overwrite and isfile(h5_filename) and not suppress_warning:
             logging.warning('WARNING: About to overwrite h5 file {}, proceed with caution!!!! Press enter to confirm.'.format(h5_filename))
             input('----')
-        convert_to_h5(filename,header_size=header_size)
+        convert_to_h5(filename)
         add_current(h5_filename)
     logging.debug('searching for file ' + h5_filename)
     
