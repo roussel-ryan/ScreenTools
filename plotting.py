@@ -40,8 +40,8 @@ def plot_screen(filename,dataset = '/img',image_number=0,ax=None,scaled=False):
     shape = data.shape
     px_scale = utils.get_attr(filename,'pixel_scale')
     if scaled:
-        ax.imshow(data,extent = [-int(shape[0]/2)*px_scale,int(shape[0]/2)*px_scale,-int(shape[1]/2)*px_scale,int(shape[1]/2)*px_scale])
-        ax.set_aspect(shape[0]/shape[1])
+        ax.imshow(data,extent = [-int(shape[1]/2)*px_scale,int(shape[1]/2)*px_scale,-int(shape[0]/2)*px_scale,int(shape[0]/2)*px_scale])
+        #ax.set_aspect(shape[0]/shape[1])
         ax.set_xlabel('x [m]')
         ax.set_ylabel('y [m]')
     else:
