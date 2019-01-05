@@ -34,7 +34,7 @@ def get_2D_gauss_fit(filename,image_number=0):
     else:
         return fit
 
-def get_array_moments(array):
+def get_array_moments(array,x_scale=1,y_scale=1):
     '''
     raw calcuation of moments of a 2D histogram array
     
@@ -44,29 +44,39 @@ def get_array_moments(array):
                 Note: used in analysis.calc_moments fucntion
     Outputs
     -------
-    moments     list(<x>,<y>,<xy>,sqrt(<x^2> - <x>^2),sqrt(<y^2> - <y>^2))
+    moments     list((<x>,<y>),((<(x-ux)^2>,<(y-uy)^2>,<(x-ux)(y-uy)>)
 
     '''
 
     T = np.sum(array)
     n,m = array.shape
     
-    y = np.arange(n)
-    x = np.arange(m)
+    y = np.arange(n)*y_scale
+    x = np.arange(m)*x_scale
 
-    exp_x = np.sum(np.dot(array,x),dtype = np.int64) / T
-    exp_x2 = np.sum(np.dot(array,(x - exp_x)**2),dtype = np.int64) / T
+    #calculate mean (m) covarience (s) matrix elements
+    m1 = np.sum(np.dot(array,x),dtype = np.int64) / T
+    s11 = np.sum(np.dot(array,(x - m1)**2),dtype = np.int64) / T
 
-    exp_y = np.sum(np.dot(array.T,y),dtype = np.int64) / T
-    exp_y2 = np.sum(np.dot(array.T,(y - exp_y)**2),dtype = np.int64) / T
+    m2 = np.sum(np.dot(array.T,y),dtype = np.int64) / T
+    s22 = np.sum(np.dot(array.T,(y - m2)**2),dtype = np.int64) / T
 
-    exp_xy = np.sum(np.dot(x,np.dot(array.T,y)),dtype = np.int64) / T
-    if exp_y < 0:
+    s12 = np.sum(np.dot(np.dot(array.T,y - m2),x - m1),dtype = np.int64) / T
+    if m2 < 0:
         logging.debug(np.dot(array.T,y))
         logging.debug(exp_y)
         logging.debug(T)
-    return (exp_x,exp_y,exp_xy,np.sqrt(exp_x2),np.sqrt(exp_y2))
-      
+    return (np.array((m1,m2)),np.array(((s11,s12),(s12,s22))))
+
+def calculate_ellipse(array,x_scale=1,y_scale=1):
+    '''
+    calculate the parameters for plotting an ellipse on top of an array
+    '''
+    moments = get_array_moments(array,x_scale,y_scale)
+    
+    lambda_, v = np.linalg.eig(moments[1])
+    return moments[0],lambda_,v
+
 def calc_moments(filename):
     '''
     calculate statistical moments for each frame and for the entire file

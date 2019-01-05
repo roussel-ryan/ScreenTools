@@ -36,7 +36,7 @@ def get_mask(array,center,radius):
         
     return mask
 
-def mask(h5file):
+def mask_file(h5file):
     '''
     masks all images in <h5file>
     '''
@@ -83,12 +83,12 @@ def mask(h5file):
         else:
             logging.info('File {} is already masked'.format(h5file))
 
-def remove_array_background(array,plotting = False):
+def calculate_threshold(array,plotting = False):
     #choose thresholding with iterative process
     #http://uspas.fnal.gov/materials/08UMD/Imaging.pdf
     
     signal_max = np.max(array,axis=None)
-    threshold = np.linspace(0.0,signal_max,100)
+    threshold = np.linspace(0.0,signal_max,500)
 
     #fraction of peak derivative to cut off
     dthreshold = 0.25
@@ -102,27 +102,74 @@ def remove_array_background(array,plotting = False):
     d = np.gradient(ndata/np.max(ndata))
     dd = np.gradient(d)
     peak_dd_index = np.argmax(dd)
+    peak_dd = dd[peak_dd_index]
+    ten_percent_level_peak_dd = 0.1*peak_dd 
 
+    #cut AFTER peak of second dervative, at 10% level
+    new_dd = dd[peak_dd_index:]
+    new_index = np.argwhere(new_dd < ten_percent_level_peak_dd)[0] + peak_dd_index
     
-    nd = -d[peak_dd_index:]
-    nthreshold = threshold[peak_dd_index:]
-    dmax = np.max(nd)
+    
+    #correct_index = np.argmax(nd/dmax < dthreshold)
+    correct_index = new_index    
 
-    correct_index = np.argmax(nd/dmax < dthreshold)
-    
-    result = np.where(array > nthreshold[correct_index],array,0.0)
-    
     if plotting:
         fig,ax = plt.subplots()
         ax.plot(threshold/np.max(threshold),ndata/np.max(ndata))
         ax2 = ax.twinx()           
         ax2.plot(threshold/np.max(threshold),d)
         ax2.plot(threshold/np.max(threshold),dd)
-        ax.axvline(nthreshold[correct_index]/np.max(threshold),ls='--')
+        ax.axvline(threshold[correct_index]/np.max(threshold),ls='--')
+        result = np.where(array > threshold[correct_index],array,0.0)
 
-        fig2,ax3 = plt.subplots()
+        fig2,ax2 = plt.subplots()
+        ax2.imshow(array)
+
+        fig3,ax3 = plt.subplots()
         ax3.imshow(result)
-    return result
+        
+    return threshold[correct_index]
+
+def plot_threshold(h5file):
+    with h5py.File(h5file) as f:
+        calculate_threshold(f['/0/img'][:],plotting=True)
+
+def set_threshold(h5file,level=0):
+    with h5py.File(h5file,'r+') as f:
+        f['/'].attrs['global_threshold'] = level
+        frames = f.attrs['nframes']
+        if level:
+            logging.info('Setting threshold level of all frames to {} in file {}'.format(level,h5file))
+            for i in range(frames-1):
+                datagrp = f['/{}'.format(i)]
+                logging.debug('setting threshold of image {} to {}'.format(i,level))
+                datagrp.attrs['threshold'] = level
+
+        else:
+            logging.info('Setting threshold level of all frames to based on calcuations in file {}'.format(h5file))
+            for i in range(frames-1):                
+                dataset = f['/{}/img'.format(i)][:]
+                threshold = calculate_threshold(dataset)
+                logging.debug('setting threshold of image {} to {}'.format(i,threshold)) 
+                f['/{}'.format(i)].attrs['threshold'] = threshold
+                
+                
+def apply_threshold(h5file):
+    with h5py.File(h5file,'r+') as f:
+        frames = f.attrs['nframes']
+        logging.info('Applying thresholds to file {}'.format(h5file))
+        for i in range(frames-1):
+            dataset = f['/{}/img'.format(i)]
+            threshold = f['/{}'.format(i)].attrs['threshold']
+            logging.debug('Thresholding image {} at {}'.format(i,threshold))
+            dataset[...] = np.where(dataset[:] > threshold,dataset[:],0)
+
+def threshold_file(h5file,level = 0):
+    logging.info('thresholding {}'.format(h5file))
+    set_threshold(h5file,level)
+    apply_threshold(h5file)
+    return h5file
+                
 
 def aperature_array(array,center,radius,plotting = False):
     data = []
@@ -138,26 +185,12 @@ def aperature_array(array,center,radius,plotting = False):
         fig,ax = plt.subplots()
         ax.plot(ndata[0],ndata[1])
     
-        
-def remove_background(h5file):
-    if not utils.get_attr(h5file,'background_removed'):
-        logging.info('removing background from file {}'.format(h5file))
-        with h5py.File(h5file,'r+') as f:
-            frames = f.attrs['nframes']
-            for i in range(frames-1):
-                logging.debug('removing background from frame {}'.format(i))
-                dataset = f['/{}/img'.format(i)]
-                narray = remove_array_background(dataset[:])
-                dataset[...] = narray
-            f.attrs['background_removed'] = 1    
-    return None
-    
 def filter_array(array,sigma=1,size=4):
     ''' apply a median filter and a gaussian filter to image'''
     ndata = ndimage.median_filter(array,size)
     return ndimage.gaussian_filter(ndata,sigma)
     
-def filter(h5file,filter_high_res = False):
+def filter_file(h5file,filter_high_res = False):
     '''filtering larger images is unnecessary'''
     if not utils.get_attr(h5file,'filtered'):
         with h5py.File(h5file,'r+') as f:
