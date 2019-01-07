@@ -104,7 +104,7 @@ def add_current(h5filename):
 
     else:
         logging.warning('No current file found associated with ' + h5filename)
-    
+        raise RuntimeError
     with h5py.File(h5filename,'r+') as f:
         try:
             for i,dset in zip(range(len(datasets)),datasets):
@@ -165,7 +165,10 @@ def process_raw(filename,overwrite=False,skip_screen_finder=False,suppress_warni
             logging.warning('WARNING: About to overwrite h5 file {}, proceed with caution!!!! Press enter to confirm.'.format(h5_filename))
             input('----')
         convert_to_h5(filename)
-        add_current(h5_filename)
+        try:
+            add_current(h5_filename)
+        except RuntimeError:
+            pass
     logging.debug('searching for file ' + h5_filename)
     
     if not skip_screen_finder:
