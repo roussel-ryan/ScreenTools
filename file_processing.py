@@ -11,6 +11,7 @@ import h5py
 
 from . import utils
 from . import screen_finder
+from . import current
 
 def process_folder(path,same_screen=False,**kwargs):
     '''
@@ -61,57 +62,8 @@ def process_folder(path,same_screen=False,**kwargs):
         for filename in dat_files:
             h5_files.append(process_raw(filename,**kwargs))
     
-
-    
     return h5_files
 
-def add_current(h5filename):
-    '''
-    adds current distribution from LeCroy to each image group
-
-    Inputs:
-    -------
-    h5filename      h5 filename which contains image data
-
-    '''
-    
-    fbase = h5filename.split('_img')[0].split('.')[0]
-    if isfile(fbase + 'LeCroy.sdds'):
-        with open(fbase + 'LeCroy.sdds') as f:
-            datasets = []
-            for line in f:
-                pt = line.strip().split('\t')
-                if len(pt) == 2:
-                    if 'time' in line:
-                        datasets.append([])
-                    else:
-                        datasets[-1].append(pt)
-                
-        #logging.info(datasets[1])
-        datasets = np.asfarray(datasets)
-        
-    elif isfile(fbase + '_LeCroy.csv'):
-        with open(fbase + '_LeCroy.csv') as f:
-            datasets = []
-            for line in f:
-                pt = line.strip().replace(' ','').split(',')
-                if len(pt) >= 2 and not 'time' in pt[0]:
-                    datasets[-1].append(pt)
-                else:
-                    if 'Number' in line: datasets.append([])
-        #logging.info(datasets[1])
-        datasets = np.asfarray(datasets)
-
-    else:
-        logging.warning('No current file found associated with ' + h5filename)
-        raise RuntimeError
-    with h5py.File(h5filename,'r+') as f:
-        try:
-            for i,dset in zip(range(len(datasets)),datasets):
-                f.create_dataset('/{}/current'.format(i),data=dset.T)
-        except RuntimeError:
-            logging.error('File {} already has current data!'.format(h5filename))
-    return h5filename
             
 def convert_to_h5(filename):
     ''' import image data into h5 format for more efficient computing'''
@@ -166,7 +118,8 @@ def process_raw(filename,overwrite=False,skip_screen_finder=False,suppress_warni
             input('----')
         convert_to_h5(filename)
         try:
-            add_current(h5_filename)
+            current.add_current(h5_filename)
+            current.add_charge(h5_filename)
         except RuntimeError:
             pass
     logging.debug('searching for file ' + h5_filename)

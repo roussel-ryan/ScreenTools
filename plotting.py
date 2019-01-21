@@ -9,7 +9,7 @@ from . import utils
 
 def check_axes(axes):
     if axes:
-        return ax
+        return axes
     else:
         fig,ax = plt.subplots()
         return ax
@@ -72,9 +72,25 @@ def plot_current(filename,image_number=0,ax=None):
         data = f['/{}/current'.format(image_number)][:]
     ax.plot(data[0],data[1])
     return ax
-        
-    
-def overlay_lineout(filename,ax,image_number=0,axis=0):
+
+def plot_charge(filename):
+    '''
+    plot sequential and distribution charge data
+    '''
+    fig,axes = plt.subplots(2,1)
+    data = []
+    with h5py.File(filename) as f:
+        for i in range(f['/'].attrs['nframes']-1):
+            data.append(f['/{}/'.format(i)].attrs['charge'])
+
+    data = np.asfarray(data)
+    axes[0].plot(data)
+
+    h,be = np.histogram(data,bins='auto')
+    bc = (be[1:]+be[:-1]) / 2
+    axes[1].plot(bc,h)
+
+def overlay_projection(filename,ax,image_number=0,axis=0):
     '''
     overlay a projection (lineout) onto a image plot
 
@@ -92,7 +108,7 @@ def overlay_lineout(filename,ax,image_number=0,axis=0):
     ylim = ax.get_ylim()
     if axis == 0:
         ax2 = ax.twinx()
-        ax2.plot(lineout)
+        ax2.plot(np.linspace(*xlim,len(lineout)),lineout)
     elif axis == 1:
         ax2 = ax.twiny()
         ax2.plot(lineout,range(len(lineout)))

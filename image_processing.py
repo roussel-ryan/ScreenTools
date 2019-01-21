@@ -10,6 +10,51 @@ from .processing import thresholding
 from .processing import masking
 from . import utils
 
+
+
+class ImageBox:
+    ''' 
+    class to store and transform scaling for images for pixel->real space
+    '''
+    def __init__(self):
+        self.center = np.asfarray([0,0])
+        self.size = np.asfarray([1,1])
+
+    def set_center(self,center):
+        self.center = center
+
+    def set_size(self,size):
+        self.size = size
+
+    def set_bbox(self,coords):
+        ''' coords in the form [[x0,y0],[x1,y1]]
+        where 
+        (x0,y0) is bottom left and
+        (x1,y1) is bottom right
+        '''
+        if not type(coords) == np.ndarray:
+            coords = np.asfarray(coords)
+        self.center = np.asfarray(((coords[0][0] + coords[1][0])/2,(coords[0][1] + coords[1][1])/2))
+        self.size = np.asfarray((coords[1][0]-coords[0][0],coords[1][1] - coords[0][1]))
+
+    def check_type(self):
+        if not type(self.center) == np.ndarray:
+            self.center = np.asfarray(self.center)
+        if not type(self.size) == np.ndarray:
+            self.size = np.asfarray(self.size)
+    
+    def get_bbox(self):
+        self.check_type()
+        v0 = self.center - self.size / 2
+        v1 = self.center + self.size / 2
+        return np.vstack(v0,v1)
+
+    def get_extent(self):
+        self.check_type()
+        v0 = self.center - self.size / 2
+        v1 = self.center + self.size / 2
+        return [v0[0],v1[0],v0[1],v1[1]]
+    
 def mask_file(h5file):
     '''
     masks all images in <h5file>
