@@ -1,6 +1,7 @@
 import numpy as np
 import h5py
 import logging
+import os
 
 from . import utils
 
@@ -15,7 +16,7 @@ def add_current(h5filename):
     '''
     
     fbase = h5filename.split('_img')[0].split('.')[0]
-    if isfile(fbase + 'LeCroy.sdds'):
+    if os.path.isfile(fbase + 'LeCroy.sdds'):
         with open(fbase + 'LeCroy.sdds') as f:
             datasets = []
             for line in f:
@@ -29,7 +30,7 @@ def add_current(h5filename):
         #logging.info(datasets[1])
         datasets = np.asfarray(datasets)
         
-    elif isfile(fbase + '_LeCroy.csv'):
+    elif os.path.isfile(fbase + '_LeCroy.csv'):
         with open(fbase + '_LeCroy.csv') as f:
             datasets = []
             for line in f:
@@ -75,6 +76,7 @@ def add_charge(h5filename):
 
 #for use in utils.get_frames
 def mean_charge(f,ID):
+    #returns true if frame current is within +/- 1 sigma of the mean
     return abs(f['/{}'.format(ID)].attrs['charge'] - f['/'].attrs['avg_charge']) < f['/'].attrs['std_charge']
         
 

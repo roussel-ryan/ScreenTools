@@ -32,15 +32,15 @@ def get_array_moments(array,image_box):
 
     
     #calculate mean (m) covarience (s) matrix elements
-    m1 = np.sum(np.dot(array,x),dtype = np.int64) / T
-    s11 = np.sum(np.dot(array,(x - m1)**2),dtype = np.int64) / T
+    m1 = np.sum(np.dot(array,x)) / T
+    s11 = np.sum(np.dot(array,(x - m1)**2)) / T
 
-    m2 = np.sum(np.dot(array.T,y),dtype = np.int64) / T
-    s22 = np.sum(np.dot(array.T,(y - m2)**2),dtype = np.int64) / T
+    m2 = np.sum(np.dot(array.T,y)) / T
+    s22 = np.sum(np.dot(array.T,(y - m2)**2)) / T
 
-    s12 = np.sum(np.dot(np.dot(array.T,y - m2),x - m1),dtype = np.int64) / T
+    s12 = np.sum(np.dot(np.dot(array.T,y - m2),x - m1)) / T
 
-    return (np.array((m1,m2)),np.array(((s11,s12),(s12,s22))))
+    return (np.asfarray((m1,m2)),np.asfarray(((s11,s12),(s12,s22))))
 
 def calculate_ellipse(array,image_box):
     '''
@@ -82,12 +82,12 @@ def calculate_moments(filename,constraints=None):
     frames = utils.get_frames(filename,constraints)
 
     
-    with h5py.File(filename) as f:
+    with h5py.File(filename,'r+') as f:
         for i in frames:
             grp = f['/{}'.format(i)]
 
             ib = ip.ImageBox()
-            ib.size = np.asfarray((f['/'].attrs['dx'],f['/'].attrs['dy']))*f['/'].attrs['pixel_scale']
+            ib.set_size(np.asfarray((f['/'].attrs['dx'],f['/'].attrs['dy']))*f['/'].attrs['pixel_scale'])
             
             moments = get_array_moments(grp['img'][:],ib)
             grp.attrs['beam_center'] = moments[0]
@@ -98,17 +98,27 @@ def calculate_moments(filename,constraints=None):
     center_data = np.asfarray(center_data)
     moment_data = np.asfarray(moment_data)
     stats = []
-    logging.debug(center_data)
+    #logging.debug(center_data)
 
-    center_stats = np.array((np.mean(center_data.T,axis=1),np.std(center_data.T,axis=1))).T
-    moment_stats = np.array((np.mean(moment_data.T,axis=1),np.std(moment_data.T,axis=1))).T
+    center_stats = np.asfarray((np.mean(center_data.T,axis=1),np.std(center_data.T,axis=1))).T
+    moment_stats = np.asfarray((np.mean(moment_data.T,axis=1),np.std(moment_data.T,axis=1))).T
     
     with h5py.File(filename,'r+') as f:
-        f.attrs['beam_center'] = center_stats
-        f.attrs['beam_matrix'] = moment_stats
+        f['/'].attrs['beam_center'] = center_stats
+        f['/'].attrs['beam_matrix'] = moment_stats
+        f['/'].attrs['calculated_moments'] = 1
         
     return (center_stats,moment_stats)
-        
+
+def get_moments(filename,conditions=None,overwrite=False):
+
+    if not utils.get_attr(filename,'calculated_moments') or overwrite:
+        return calculate_moments(filename,conditions)
+    else:
+        center = utils.get_attr(filename,'beam_center')
+        matrix = utils.get_attr(filename,'beam_matrix')
+        return (center,matrix)
+
 def get_center_lineout(filename,image_number = 0,axis = 0,dataset='/img'):
     '''
     get the 1D lineout of a given axis from file at the distribution center

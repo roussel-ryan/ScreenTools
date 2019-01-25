@@ -62,14 +62,26 @@ def mask_file(h5file):
     return masking.mask_file(h5file)
     
 
-def threshold_file(h5file,level = 0, manual = False):
+def threshold_file(h5file,level=0,manual=False,overwrite=False,plotting=False):
     logging.info('thresholding {}'.format(h5file))
-    if manual:
-        m = thresholding.ManualThresholdSelector(h5file)
-    else:
-        thresholding.set_threshold(h5file,level,manual)
+    with h5py.File(h5file) as f:
+        try:
+            a = f['/0'].attrs['threshold']
+            is_thresholded = True
+        except KeyError:
+            is_thresholded = False
 
-    thresholding.apply_threshold(h5file)
+    if plotting:
+        thresholding.plot_threshold(h5file)
+        return h5file
+            
+    if not is_thresholded or overwrite:
+        if manual:
+            m = thresholding.ManualThresholdSelector(h5file)
+        else:
+            thresholding.set_threshold(h5file,level)
+
+        thresholding.apply_threshold(h5file)
     return h5file
                 
 
@@ -90,7 +102,8 @@ def aperature_array(array,center,radius,plotting = False):
 def filter_array(array,sigma=1,size=4):
     ''' apply a median filter and a gaussian filter to image'''
     ndata = ndimage.median_filter(array,size)
-    return ndimage.gaussian_filter(ndata,sigma)
+    return ndata
+    #return ndimage.gaussian_filter(ndata,sigma)
     
 def filter_file(h5file,filter_high_res = False):
     '''filtering'''

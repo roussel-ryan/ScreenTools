@@ -115,6 +115,20 @@ def overlay_projection(filename,ax,image_number=0,axis=0):
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
+def overlay_ellipse(filename,ax,image_number=0,axis=0):
+    with h5py.File(filename,'r') as f:
+        grp = f['/{}'.format(image_number)]
+        try:
+            beam_center = grp.attrs['beam_center']
+            beam_moments = grp.attrs['beam_moments']
+
+        except KeyError:
+            logging.error('Image stats have not been calculated yet!')
+
+        
+        ell = Ellipse(xy=beam_center,\
+                      width = beam_moments[0][0]**(0.5)*2,\
+                      height = 
 
 
     
