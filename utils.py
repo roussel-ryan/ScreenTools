@@ -7,13 +7,16 @@ from os.path import isfile, join
 def no_condition(f,ID):
     return True
 
-def get_frames(filename,functions=no_condition):
+def get_frames(filename,functions=None):
     ''' return list of frame numbers which satisfy certain conditions given by a single callable function or an array of callable functions
 
     functions MUST
     - take take the form of func(<root_dataset(H5py.dataset)>,<ID(int)>)
     - return a boolean type
     '''
+    if not functions:
+        functions = no_condition
+    
     with h5py.File(filename) as f:
         nframes = f.attrs['nframes']
 

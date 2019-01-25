@@ -6,6 +6,8 @@ from scipy.optimize import curve_fit
 from . import gaussfitter2
 from . import utils
 
+from . import image_processing as ip
+
 def get_array_moments(array,image_box):
     '''
     raw calcuation of moments of a 2D histogram array
@@ -24,7 +26,7 @@ def get_array_moments(array,image_box):
     n,m = array.shape
 
     ext = image_box.get_extent()
-    logging.debug(ext)
+    #logging.debug(ext)
     y = np.linspace(ext[2],ext[3],n)
     x = np.linspace(ext[0],ext[1],m)
 
@@ -37,9 +39,7 @@ def get_array_moments(array,image_box):
     s22 = np.sum(np.dot(array.T,(y - m2)**2),dtype = np.int64) / T
 
     s12 = np.sum(np.dot(np.dot(array.T,y - m2),x - m1),dtype = np.int64) / T
-    if m2 < 0:
-        logging.debug(m2)
-        logging.debug((s11,s12,s22))
+
     return (np.array((m1,m2)),np.array(((s11,s12),(s12,s22))))
 
 def calculate_ellipse(array,image_box):
@@ -61,7 +61,7 @@ def center_distribution(array,image_box):
     return image_box
 
 
-def calculate_moments(filename):
+def calculate_moments(filename,constraints=None):
     '''
     calculate statistical moments for each frame and for the entire file
     results are set as attributes of each image group and in the file attrs
@@ -75,24 +75,39 @@ def calculate_moments(filename):
     filename    h5 file with image data and results
     '''
     
-    stat_data = []
-    with h5py.File(filename) as f:
-        for i in range(f.attrs['nframes']-1):
-            grp = f['/{}'.format(i)]
-            stats = get_array_moments(grp['img'][:])
-            grp.attrs['moments'] = stats
-            stat_data.append(stats)
-     
-    ndata = np.asfarray(stat_data).T
-    stats = []
-    for ele in ndata:
-        stats.append([np.mean(ele),np.std(ele)])
-    nstats = np.asfarray(stats)
-    logging.debug(stats)
-    with h5py.File(filename,'r+') as f:
-        f.attrs['moments_stats'] = stats
+    center_data = []
+    moment_data = []
 
-    return filename
+    logging.info('Calculating moments of file {}'.format(filename))
+    frames = utils.get_frames(filename,constraints)
+
+    
+    with h5py.File(filename) as f:
+        for i in frames:
+            grp = f['/{}'.format(i)]
+
+            ib = ip.ImageBox()
+            ib.size = np.asfarray((f['/'].attrs['dx'],f['/'].attrs['dy']))*f['/'].attrs['pixel_scale']
+            
+            moments = get_array_moments(grp['img'][:],ib)
+            grp.attrs['beam_center'] = moments[0]
+            grp.attrs['beam_matrix'] = moments[1]
+            center_data.append(moments[0])
+            moment_data.append(moments[1].flatten())
+            
+    center_data = np.asfarray(center_data)
+    moment_data = np.asfarray(moment_data)
+    stats = []
+    logging.debug(center_data)
+
+    center_stats = np.array((np.mean(center_data.T,axis=1),np.std(center_data.T,axis=1))).T
+    moment_stats = np.array((np.mean(moment_data.T,axis=1),np.std(moment_data.T,axis=1))).T
+    
+    with h5py.File(filename,'r+') as f:
+        f.attrs['beam_center'] = center_stats
+        f.attrs['beam_matrix'] = moment_stats
+        
+    return (center_stats,moment_stats)
         
 def get_center_lineout(filename,image_number = 0,axis = 0,dataset='/img'):
     '''
@@ -148,11 +163,8 @@ def get_averaged_projection(filename,constraint_functions=None):
                              frames, see utils.get_frames
                              Default:None
     '''
-    if constraint_functions:
-        frames = utils.get_frames(filename,constraint_functions)
-    else:
-        frames = utils.get_frames(filename)
-
+    frames = utils.get_frames(filename,constraint_function)
+    
     data = []
     for i in frames:
         data.append(get_projection(filename,image_number=i))
@@ -160,7 +172,7 @@ def get_averaged_projection(filename,constraint_functions=None):
     avg = np.mean(data,axis=0).T
     return avg
     
-    
+
     
 def get_2D_gauss_fit(filename,image_number=0):
     '''
