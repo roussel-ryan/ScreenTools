@@ -4,38 +4,45 @@ import logging
 from os import listdir
 from os.path import isfile, join
 
-def no_condition(f,ID):
-    return True
+from . import constraint
 
-def get_frames(filename,functions=None):
+def get_frames(filename,constraints=None):
     ''' return list of frame numbers which satisfy certain conditions given by a single callable function or an array of callable functions
 
-    functions MUST
-    - take take the form of func(<root_dataset(H5py.dataset)>,<ID(int)>)
-    - return a boolean type
+    functions takes a Constraint object
     '''
-    if not functions:
-        functions = no_condition
-    
+    #check constraints
+    if constraints == None:
+        constraints = [constraint.NullConstraint]
+    elif isinstance(constraints,list):
+        for ele in constraints:
+            if not isinstance(ele,constraint.Constraint):
+                logging.error('Error object {} not constraint!'.format(ele))
+    elif isinstance(constraints,constraint.Constraint):
+        constraints = [constraints]
+    else:
+        logging.error('Error object {} not constraint!'.format(constraints))
+
+    #apply constraints
     with h5py.File(filename) as f:
         nframes = f.attrs['nframes']
-
         good_frames = []
-        if type(functions) == list:
-            for i in range(nframes - 1):
-                for func in functions:
-                
-                    good = True
-                    if not func(f,i):
+        for i in range(nframes - 1):
+            good = True
+            for c in constraints:
+                logging.debug(c)
+                try:
+                    if not c.evaluate(f,i):
                         good = False
-                    #if it survives then add to good frames
-                if good:
-                    good_frames.append(i)
+                        #if it survives then add to good frames
+                except:
+                    logging.error('There was an issue evaluating frame {} in file {}'.format(i,filename))
+                    good = False
+            if good:
+                good_frames.append(i)
 
-        else:
-            for i in range(nframes - 1):
-                if functions(f,i):
-                    good_frames.append(i)
+
+
     if not len(good_frames) == nframes:
         logging.info('Cutting frames in file {}, percentage remaining:{:.2f}'.format(filename,100 * (len(good_frames)/nframes)))
         

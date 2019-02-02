@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import numpy as np
 import h5py
 import logging
@@ -7,14 +8,34 @@ from matplotlib.patches import Ellipse
 from . import analysis
 from . import utils
 
+class ScreenFigure(Figure):
+    def __init__(self,*args,**kwargs):
+        Figure.__init__(self,*args,**kwargs)
+        self.filename = kwargs.pop('filename','')
+        self.dataset = kwargs.pop('dataset','/img')
+        self.frame_number = kwargs.pop('frame_number',0)
+        self.scaled = kwargs.pop('scaled',False)
+
+def create_screen_figure(**kwargs):
+    fig = plt.figure(FigureClass=ScreenFigure,**kwargs)
+    ax = fig.add_subplot(111)
+    return fig,ax
+        
 def check_axes(axes):
     if axes:
         return axes
     else:
-        fig,ax = plt.subplots()
+        fig,ax = create_screen_figure()
         return ax
 
-def plot_screen(filename,dataset = '/img',image_number=0,ax=None,scaled=False):
+def check_fig(fig):
+    if isinstance(fig,ScreenFigure):
+        return fig
+    else:
+        fig,ax = create_screen_figure()
+        return fig
+
+def plot_screen(filename,dataset = '/img',frame_number=0,fig=None,scaled=False):
     '''
     Plot screen image for a given frame
     
@@ -32,10 +53,11 @@ def plot_screen(filename,dataset = '/img',image_number=0,ax=None,scaled=False):
 
     '''
 
-    ax = check_axes(ax)
+    fig = check_fig(fig)
+    ax = fig.axes[0]
 
-    logging.info('plotting file {}, image # {}'.format(filename,image_number))
-    name = '/{}{}'.format(image_number,dataset)
+    logging.info('plotting file {}, image # {}'.format(filename,frame_number))
+    name = '/{}{}'.format(frame_number,dataset)
     with h5py.File(filename,'r') as f:
         data = f[name][:]
     shape = data.shape
@@ -48,9 +70,16 @@ def plot_screen(filename,dataset = '/img',image_number=0,ax=None,scaled=False):
     else:
         ax.imshow(data)
     ax.set_title('{} {}'.format(filename,name))
-    return ax
+    fig.filename = filename
+    fig.frame_number = frame_number
+    fig.scaled = True
+    fig.dataset = dataset
+    
+    #logging.debug(ax.screen_name)
+    
+    return fig
 
-def plot_current(filename,image_number=0,ax=None):
+def plot_current(filename,frame_number=0,ax=None):
     '''
     plot current data from ICT for given frame
     
@@ -65,12 +94,13 @@ def plot_current(filename,image_number=0,ax=None):
     matplotlib.axes object with current plot
 
     '''
-
-
     ax = check_axes(ax)
     with h5py.File(filename,'r') as f:
-        data = f['/{}/current'.format(image_number)][:]
-    ax.plot(data[0],data[1])
+        data = f['/{}/current'.format(frame_number)][:]
+
+    l = len(data)
+    for i in range(1,l):
+        ax.plot(data[0],data[i])
     return ax
 
 def plot_charge(filename):
@@ -90,7 +120,7 @@ def plot_charge(filename):
     bc = (be[1:]+be[:-1]) / 2
     axes[1].plot(bc,h)
 
-def overlay_projection(filename,ax,image_number=0,axis=0):
+def overlay_projection(figure,axis=0):
     '''
     overlay a projection (lineout) onto a image plot
 
@@ -102,8 +132,11 @@ def overlay_projection(filename,ax,image_number=0,axis=0):
     axis          0 for horizontal lineout, 1 for vertical axis lineout
 
     '''
+    filename = figure.filename
+    frame_number = figure.frame_number
+    ax = figure.axes[0]
     
-    lineout = analysis.get_lineout(filename,image_number,axis)
+    lineout = analysis.get_projection(filename,frame_number,axis)
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
     if axis == 0:
@@ -115,20 +148,42 @@ def overlay_projection(filename,ax,image_number=0,axis=0):
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
-def overlay_ellipse(filename,ax,image_number=0,axis=0):
-    with h5py.File(filename,'r') as f:
-        grp = f['/{}'.format(image_number)]
-        try:
-            beam_center = grp.attrs['beam_center']
-            beam_moments = grp.attrs['beam_moments']
+def overlay_ellipse(figure):
+    filename = figure.filename
+    frame_number = figure.frame_number
+    ax = figure.axes[0]
 
-        except KeyError:
-            logging.error('Image stats have not been calculated yet!')
+    logging.debug('calcuating ellipse with file {} and frame number {}'.format(filename,frame_number))
+    
+    moments = analysis.get_frame_moments(filename,frame_number)
+    lambda_,v = np.linalg.eig(moments[1])
+    logging.debug(lambda_)
+    angle = np.arctan(v[0][1]/v[0][0])
+    
+    ell = Ellipse(xy=[moments[0][0],-moments[0][1]],\
+                  width = lambda_[0]**(0.5)*2,\
+                  height = lambda_[1]**(0.5)*2,\
+                  angle = np.rad2deg(angle)) 
+    ell.set_facecolor('none')
+    ell.set_edgecolor('red')
+    ell.set_linewidth(1)
+    ax.add_artist(ell)
 
+
+def plot_charge_histogram(filename,constraints=None):
+    charge = []
+    frames = utils.get_frames(filename,constraints)
+    with h5py.File(filename) as f:
+        for i in frames:
+            charge.append(f['/{}'.format(i)].attrs['charge'])
+
+    charge = np.asfarray(charge).T
+    fig,ax = plt.subplots()
+    for ele in charge:
+        h,bine = np.histogram(ele,bins='auto')
+        binc = (bine[1:] + bine[:-1]) / 2
+        ax.plot(binc*1e9,h)
+    ax.set_xlabel('Charge [nC]')
+    ax.set_ylabel('N frames')
         
-        ell = Ellipse(xy=beam_center,\
-                      width = beam_moments[0][0]**(0.5)*2,\
-                      height = 
-
-
     

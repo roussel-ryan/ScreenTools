@@ -60,6 +60,17 @@ def center_distribution(array,image_box):
     
     return image_box
 
+def calculate_frame_moments(filename,frame_number=0):
+    with h5py.File(filename,'r+') as f:
+        grp = f['/{}'.format(frame_number)]
+
+        ib = ip.ImageBox()
+        ib.set_size(np.asfarray((f['/'].attrs['dx'],f['/'].attrs['dy']))*f['/'].attrs['pixel_scale'])
+            
+        moments = get_array_moments(grp['img'][:],ib)
+        grp.attrs['beam_center'] = moments[0]
+        grp.attrs['beam_matrix'] = moments[1]
+    return moments
 
 def calculate_moments(filename,constraints=None):
     '''
@@ -80,20 +91,14 @@ def calculate_moments(filename,constraints=None):
 
     logging.info('Calculating moments of file {}'.format(filename))
     frames = utils.get_frames(filename,constraints)
-
+    if not len(frames):
+        raise RuntimeError('No frames acceped from file {}'.format(filename))
+        
+    for i in frames:
+        moments = calculate_frame_moments(filename,i)
     
-    with h5py.File(filename,'r+') as f:
-        for i in frames:
-            grp = f['/{}'.format(i)]
-
-            ib = ip.ImageBox()
-            ib.set_size(np.asfarray((f['/'].attrs['dx'],f['/'].attrs['dy']))*f['/'].attrs['pixel_scale'])
-            
-            moments = get_array_moments(grp['img'][:],ib)
-            grp.attrs['beam_center'] = moments[0]
-            grp.attrs['beam_matrix'] = moments[1]
-            center_data.append(moments[0])
-            moment_data.append(moments[1].flatten())
+        center_data.append(moments[0])
+        moment_data.append(moments[1].flatten())
             
     center_data = np.asfarray(center_data)
     moment_data = np.asfarray(moment_data)
@@ -110,28 +115,35 @@ def calculate_moments(filename,constraints=None):
         
     return (center_stats,moment_stats)
 
-def get_moments(filename,conditions=None,overwrite=False):
+def get_frame_moments(filename,frame_number=0,overwrite=False):
+    return calculate_frame_moments(filename,frame_number)
+    #else:
+    #    center = utils.get_attr(filename,'beam_center',dataset='/{}'.format(frame_number))
+    #    matrix = utils.get_attr(filename,'beam_matrix',dataset='/{}'.format(frame_number))
+    #    return (center,matrix)   
+
+def get_moments(filename,constraints=None,overwrite=False):
 
     if not utils.get_attr(filename,'calculated_moments') or overwrite:
-        return calculate_moments(filename,conditions)
+        return calculate_moments(filename,constraints)
     else:
         center = utils.get_attr(filename,'beam_center')
         matrix = utils.get_attr(filename,'beam_matrix')
         return (center,matrix)
 
-def get_center_lineout(filename,image_number = 0,axis = 0,dataset='/img'):
+def get_center_lineout(filename,frame_number = 0,axis = 0,dataset='/img'):
     '''
     get the 1D lineout of a given axis from file at the distribution center
     
     Inputs
     ------
     filename      h5 file with image data
-    image_number  frame number in file
+    frame_number  frame number in file
     axis          0 for horizontal axis,1 for vertical axis
     dataset       dataset for image (either /img or /raw)
     '''
     with h5py.File(filename) as f:
-        data = f['/{}{}'.format(image_number,dataset)][:]
+        data = f['/{}{}'.format(frame_number,dataset)][:]
         moments = get_array_moments(data,1,1)
 
     logging.debug(moments)
@@ -140,14 +152,14 @@ def get_center_lineout(filename,image_number = 0,axis = 0,dataset='/img'):
     else:
         return data[int(moments[0][1])]
 
-def get_projection(filename,image_number=0,axis=0,normalize=False,dataset='/img'):
+def get_projection(filename,frame_number=0,axis=0,normalize=False,dataset='/img'):
     '''
     calculate the projection of a given axis from file
     
     Inputs
     ------
     filename      h5 file with image data
-    image_number  frame number in file
+    frame_number  frame number in file
     axis          0 for horizontal axis,1 for vertical axis
     normalize     normalizes output so area = 1, defualt=False
     dataset       dataset for image (either /img or /raw)
@@ -155,7 +167,7 @@ def get_projection(filename,image_number=0,axis=0,normalize=False,dataset='/img'
 
     
     with h5py.File(filename,'r') as f:
-        data = f['/{}{}'.format(image_number,dataset)][:]
+        data = f['/{}{}'.format(frame_number,dataset)][:]
         lineout = np.sum(data,axis=axis)
     if normalize:
         return lineout / np.sum(lineout)
@@ -177,14 +189,14 @@ def get_averaged_projection(filename,constraint_functions=None):
     
     data = []
     for i in frames:
-        data.append(get_projection(filename,image_number=i))
+        data.append(get_projection(filename,frame_number=i))
     data = np.asfarray(data)
     avg = np.mean(data,axis=0).T
     return avg
     
 
     
-def get_2D_gauss_fit(filename,image_number=0):
+def get_2D_gauss_fit(filename,frame_number=0):
     '''
     DEPRECIATED
     get the fit parameters for a single image
@@ -192,13 +204,13 @@ def get_2D_gauss_fit(filename,image_number=0):
     - returns the fit params via [meanx,meany,stdx,stdy]
     '''
 
-    fit = utils.get_attr(filename,'gauss_fit',dataset='/{}'.format(image_number))
+    fit = utils.get_attr(filename,'gauss_fit',dataset='/{}'.format(frame_number))
 
     if not isinstance(fit,np.ndarray):
         #if fit has not been performed then do the fit
         with h5py.File(filename,'r+') as f:
-            dataset = f['/{}'.format(image_number)]
-            logging.info('doing gaussfit on file:{},image:{}'.format(filename,image_number))
+            dataset = f['/{}'.format(frame_number)]
+            logging.info('doing gaussfit on file:{},image:{}'.format(filename,frame_number))
             dx = f.attrs['dx']
             dy = f.attrs['dy']
             

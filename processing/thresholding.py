@@ -99,9 +99,10 @@ class ManualThresholdSelector:
         #load image array
         with h5py.File(self.filename) as f:
             self.data = f['/0/img'][:]
-
+            self.orig = self.data
+            
         fig,ax = plt.subplots()
-        fig.suptitle('Click to select threshold points,SPACE to exit and set threshold')
+        fig.suptitle('Click to select threshold points,SPACE to exit and set threshold\n,BACKSPACE to delete last point')
         self.im = ax.imshow(self.data)
         self.ax = ax
         
@@ -124,8 +125,20 @@ class ManualThresholdSelector:
         self.im.set_data(self.data)
         self.ax.figure.canvas.draw()
 
+    def remove_last_point(self):
+        self.points = self.points[:-1]
+        self.threshold = self.threshold[:-1]
+        self.line.set_data(*np.asfarray(self.points[1:]).T)
+
+        self.data = np.where(self.orig > np.max(np.asfarray(self.threshold)),self.orig,0.0)
+        self.im.set_data(self.data)
+        self.ax.figure.canvas.draw()
+        
     def key_press(self,event):
         if event.key == ' ':
             set_threshold(self.filename,level=np.max(np.asfarray(self.threshold)))
             plt.close(self.ax.figure)
+
+        if event.key == 'backspace':
+            self.remove_last_point()
      

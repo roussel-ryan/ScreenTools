@@ -3,7 +3,6 @@ import numpy.ma as ma
 import logging
 import h5py
 import matplotlib.pyplot as plt
-
 from scipy import ndimage
 
 from .processing import thresholding
@@ -67,7 +66,10 @@ def threshold_file(h5file,level=0,manual=False,overwrite=False,plotting=False):
     with h5py.File(h5file) as f:
         try:
             a = f['/0'].attrs['threshold']
-            is_thresholded = True
+            if a:
+                is_thresholded = True
+            else:
+                is_thresholded = False
         except KeyError:
             is_thresholded = False
 
@@ -118,13 +120,14 @@ def filter_file(h5file,filter_high_res = False):
                 dataset[...] = narray
             f.attrs['filtered'] = 1
     
-def reset_image(h5file,image_number=0):
-    logging.debug('resetting image {}'.format(image_number,h5file))
+def reset_image(h5file,frame_number=0):
+    logging.debug('resetting image {}'.format(frame_number,h5file))
     with h5py.File(h5file,'r+') as f:
-        del f['/{}/img'.format(image_number)]
-        raw = f['/{}/raw'.format(image_number)][:]
+        del f['/{}/img'.format(frame_number)]
+        raw = f['/{}/raw'.format(frame_number)][:]
 
-        f.create_dataset('/{}/img'.format(image_number),data=raw)
+        f.create_dataset('/{}/img'.format(frame_number),data=raw)
+        f['/{}'.format(frame_number)].attrs['threshold'] = 0.0
         
 def reset_file(h5file):
     logging.info('resetting file {}'.format(h5file))
