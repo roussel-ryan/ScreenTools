@@ -16,7 +16,7 @@ from . import current
 from .processing import thresholding
 
 
-def fit_quad_scan(path,L,l,Bp,current_to_gradient_func,constraints = None,plotting = False,overwrite = False,base_filename = 'QUADSCAN_',axis=0,save_points=False):
+def fit_quad_scan(path,L,l,Bp,current_to_gradient_func,constraints = None,plotting = False,overwrite = False,base_filename = ('QUADSCAN_','_img.h5'),axis=0,save_points=False,reverse_polarity=False,bounds=None):
     '''
     use a quad scan about a waist position to calcuate 
     twiss functions and emittance
@@ -31,12 +31,21 @@ def fit_quad_scan(path,L,l,Bp,current_to_gradient_func,constraints = None,plotti
     plotting     plot the quadratic fit
     axis         axis for the fit 0:x 1:y
     '''
+    s = get_scan_data(path,Bp,current_to_gradient_func,\
+                      constraints=constraints,\
+                      overwrite=overwrite,base_filename = base_filename,\
+                      axis=axis,save_points=save_points,\
+                      reverse_polarity=reverse_polarity)
 
+    return fit(s,L,l,plotting=plotting,bounds=bounds,axis=axis)
+    
+
+def get_scan_data(path,Bp,current_to_gradient_func,constraints = None,overwrite=False,base_filename = ('QUADSCAN_','_img.h5'),axis=0,save_points=False,reverse_polarity=False):
     #get files and extact quad gradients
     files = utils.get_files(path,'.h5')
     quad_currents = []
     for ele in files:
-        quad_currents.append(ele.split(base_filename)[1].split('_img.h5')[0].replace('_','.'))
+        quad_currents.append(ele.split(base_filename[0])[1].split(base_filename[1])[0].replace('_','.'))
     sort_index = np.argsort(np.asfarray(quad_currents))
     logging.debug(sort_index)
     files = np.array(files)[sort_index]
@@ -58,26 +67,27 @@ def fit_quad_scan(path,L,l,Bp,current_to_gradient_func,constraints = None,plotti
         except RuntimeError:
             pass
 
-    s = s[1:]
-    s = [*s[0:2],*s[4:]]
     s = np.asfarray(s).T
-    logging.info(s)
 
-    #scale current to kappa
-    if axis == 0:
-        s[0] = current_to_gradient_func(s[0]) / Bp
+    if reverse_polarity:
+        p = -1.0
     else:
-        s[0] = -1*current_to_gradient_func(s[0]) / Bp
-    #sy[0] = current_to_gradient_func(sy[0]) / Bp
+        p = 1.0
+    
+    #scale current to kappa
+    K = p*current_to_gradient_func(s[0]) / Bp
+    
+    n = ['x','y']
+    if save_points:
+        np.savetxt(path + 'quad_scan_{}.txt'.format(n[axis]),s)
+    return [K,s[1],s[2]]
 
-    #scale current to (1 + LlK) for fitting
-    #fit_x = 1 + sx[0]*L*l
-    #fit_y = 1 + sy[0]*L*l
-
-    #do fitting
-    bounds = ((0.0,0.0,0.0),(1.0,1.0,1.0))
-    fit_func = explicit_fit
-    xopt,xcov = optimize.curve_fit(fit_func,s[0],s[1],sigma=s[2],absolute_sigma=True,bounds=bounds)
+def fit(s,L,l,bounds=None,plotting=False,axis=0):
+    f = FitFunction(L,l,axis)
+    
+    if bounds==None:
+        bounds = ((-np.inf,-np.inf,-np.inf),(np.inf,np.inf,np.inf))
+    xopt,xcov = optimize.curve_fit(f.fit,s[0],s[1],sigma=s[2],absolute_sigma=True,bounds=bounds)
     #yopt,ycov = optimize.curve_fit(quadratic_fit,sy[0],sy[1],sigma=sy[2],absolute_sigma=True)
 
     
@@ -87,7 +97,7 @@ def fit_quad_scan(path,L,l,Bp,current_to_gradient_func,constraints = None,plotti
         
         ax.errorbar(s[0],s[1],s[2],fmt='o',capsize=5)
         x = np.linspace(s[0][0],s[0][-1])
-        ax.plot(x,fit_func(x,*xopt))
+        ax.plot(x,f.fit(x,*xopt))
         #ax.errorbar(sy[0],sy[1],sx[2],fmt='o',capsize=5)
         #y = np.linspace(sy[0][0],sy[0][-1])
         #ax.plot(y,quadratic_fit(y,*yopt))
@@ -95,8 +105,6 @@ def fit_quad_scan(path,L,l,Bp,current_to_gradient_func,constraints = None,plotti
         ax.set_xlabel('$\kappa [m^{-2}]$')
         ax.set_ylabel('$\sigma^2 [m^2]$')
 
-    if save_points:
-        np.savetxt('quad_scan.txt',s)
         
     logging.info('sigma fit: {}'.format(xopt))
     logging.info('Confidence: {}'.format(xcov))
@@ -104,16 +112,35 @@ def fit_quad_scan(path,L,l,Bp,current_to_gradient_func,constraints = None,plotti
     
     return np.array(((xopt[0],xopt[1]),(xopt[1],xopt[2])))
 
+class FitFunction:
+    def __init__(self,L,l,axis):
+        self.L = L
+        self.l = l
+
+        if axis==0:
+            self.m = 1
+        else:
+            self.m = -1
+        
+    def fit(self,x,s11,s21,s22):
+        return s11*(x*self.L*self.l - self.m*1)**2 + self.L*((2-2*x*self.m*self.l*self.L)*s21 + self.L*s22)
+
 
 def radiabeam_quad_current_to_gradient(current):
     return 0.94*current
+
+def imp_quad_c2g(current):
+    return 0.872*current + 0.062
+
+def peach_quad_c2g(current):
+    return 0.947*current
 
 def quadratic_fit(x,a,b,c):
     return a*x**2 + b*x + c
 
 def explicit_fit(x,s11,s21,s22):
-    L = 0.35
     l = 0.1
+    L = 0.457
     return s11*(x*L*l - 1)**2 + L*((2-2*x*l*L)*s21 + L*s22)
 
 def get_beam_matrix(opt,cov,L,l):

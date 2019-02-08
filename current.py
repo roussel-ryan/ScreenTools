@@ -122,9 +122,9 @@ def get_file_charge(filename,overwrite=False):
 
 
 #for use in utils.get_frames
-def mean_charge(f,ID):
+def mean_charge(f,ID,ICT_channel = 0):
     #returns true if frame current is within +/- 1 sigma of the mean
-    return abs(f['/{}'.format(ID)].attrs['charge'] - f['/'].attrs['avg_charge']) < f['/'].attrs['std_charge']
+    return abs(f['/{}'.format(ID)].attrs['charge'][ICT_channel] - f['/'].attrs['avg_charge'][ICT_channel]) < f['/'].attrs['std_charge'][ICT_channel]
         
 def selected_charge(f,ID,lower_limit,upper_limit,ICT_channel):
     #returns true if charge @ ICT5 is 2.0 +/- 0.5 nC

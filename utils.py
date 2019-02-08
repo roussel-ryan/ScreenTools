@@ -30,14 +30,13 @@ def get_frames(filename,constraints=None):
         for i in range(nframes - 1):
             good = True
             for c in constraints:
-                logging.debug(c)
-                try:
-                    if not c.evaluate(f,i):
-                        good = False
-                        #if it survives then add to good frames
-                except:
-                    logging.error('There was an issue evaluating frame {} in file {}'.format(i,filename))
+                #logging.debug(c)
+                if not c.evaluate(f,i):
                     good = False
+                        #if it survives then add to good frames
+                #except:
+                #    logging.error('There was an issue evaluating frame {} in file {}'.format(i,filename))
+                #    good = False
             if good:
                 good_frames.append(i)
 
