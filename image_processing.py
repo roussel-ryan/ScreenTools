@@ -7,6 +7,7 @@ from scipy import ndimage
 
 from .processing import thresholding
 from .processing import masking
+from .processing import cropping
 from . import utils
 
 
@@ -85,7 +86,12 @@ def threshold_file(h5file,level=0,manual=False,overwrite=False,plotting=False):
 
         thresholding.apply_threshold(h5file)
     return h5file
-                
+
+def crop_image(h5file,t = 'rectangle',frame_number=0):
+    if t == 'rectangle':
+        c = cropping.ManualRectangleCrop(h5file,frame_number)
+    elif t == 'circle':
+        c = cropping.ManualCircleCrop(h5file,frame_number)
 
 def aperature_array(array,center,radius,plotting = False):
     data = []
@@ -120,7 +126,7 @@ def filter_file(h5file,filter_high_res = False):
                 dataset[...] = narray
             f.attrs['filtered'] = 1
     
-def reset_image(h5file,frame_number=0):
+def reset_frame(h5file,frame_number=0):
     logging.debug('resetting image {}'.format(frame_number,h5file))
     with h5py.File(h5file,'r+') as f:
         del f['/{}/img'.format(frame_number)]
@@ -132,7 +138,7 @@ def reset_image(h5file,frame_number=0):
 def reset_file(h5file):
     logging.info('resetting file {}'.format(h5file))
     for i in range(utils.get_attr(h5file,'nframes')-1):
-        reset_image(h5file,i)
+        reset_frame(h5file,i)
     with h5py.File(h5file,'r+') as f:
         names = ['filtered','background_removed','masked','global_threshold']
         for name in names:

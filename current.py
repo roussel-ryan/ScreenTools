@@ -85,8 +85,9 @@ def add_charge(h5filename,plotting=False):
                 current = -current[1:]
                 tcurrent = []
                 for c in current:
-                    threshold = thresholding.calculate_threshold(c)
-                    tcurrent.append(np.where(c > threshold,c,0))
+                    #threshold = thresholding.calculate_threshold(c)
+                    #tcurrent.append(np.where(c > threshold,c,0))
+                    tcurrent.append(c)
                 
                 charge = [np.trapz(tcurrent[i]/ICT_scale[i],t) for i in range(len(tcurrent))]
                 

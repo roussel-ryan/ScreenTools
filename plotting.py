@@ -63,12 +63,12 @@ def plot_screen(filename,dataset = '/img',frame_number=0,fig=None,scaled=False):
     shape = data.shape
     px_scale = utils.get_attr(filename,'pixel_scale')
     if scaled:
-        ax.imshow(data,extent = [-int(shape[1]/2)*px_scale,int(shape[1]/2)*px_scale,-int(shape[0]/2)*px_scale,int(shape[0]/2)*px_scale])
+        ax.imshow(data,extent = [-int(shape[1]/2)*px_scale,int(shape[1]/2)*px_scale,-int(shape[0]/2)*px_scale,int(shape[0]/2)*px_scale],origin='lower')
         ax.set_aspect('equal')
         ax.set_xlabel('x [m]')
         ax.set_ylabel('y [m]')
     else:
-        ax.imshow(data)
+        ax.imshow(data,origin='lower')
     ax.set_title('{} {}'.format(filename,name))
     fig.filename = filename
     fig.frame_number = frame_number
@@ -139,12 +139,15 @@ def overlay_projection(figure,axis=0):
     lineout = analysis.get_projection(filename,frame_number,axis)
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
+
+    logging.debug(xlim)
+    logging.debug(ylim)
     if axis == 0:
         ax2 = ax.twinx()
         ax2.plot(np.linspace(*xlim,len(lineout)),lineout)
     elif axis == 1:
         ax2 = ax.twiny()
-        ax2.plot(lineout,range(len(lineout)))
+        ax2.plot(lineout,np.linspace(ylim[0],ylim[1],len(lineout)))
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
@@ -160,10 +163,10 @@ def overlay_ellipse(figure):
     logging.debug(lambda_)
     angle = np.arctan(v[0][1]/v[0][0])
     
-    ell = Ellipse(xy=[moments[0][0],-moments[0][1]],\
+    ell = Ellipse(xy=[moments[0][0],moments[0][1]],\
                   width = lambda_[0]**(0.5)*2,\
                   height = lambda_[1]**(0.5)*2,\
-                  angle = np.rad2deg(angle)) 
+                  angle = -np.rad2deg(angle)) 
     ell.set_facecolor('none')
     ell.set_edgecolor('red')
     ell.set_linewidth(1)
