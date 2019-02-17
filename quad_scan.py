@@ -76,18 +76,20 @@ def get_scan_data(path,Bp,current_to_gradient_func,constraints = None,overwrite=
     
     #scale current to kappa
     K = p*current_to_gradient_func(s[0]) / Bp
+
+    result = np.array((K,s[1],s[2]))
     
     n = ['x','y']
     if save_points:
-        np.savetxt(path + 'quad_scan_{}.txt'.format(n[axis]),s)
-    return [K,s[1],s[2]]
+        np.savetxt(path + 'quad_scan_{}.txt'.format(n[axis]),result)
+    return result
 
 def fit(s,L,l,bounds=None,plotting=False,axis=0):
     f = FitFunction(L,l,axis)
     
     if bounds==None:
         bounds = ((-np.inf,-np.inf,-np.inf),(np.inf,np.inf,np.inf))
-    xopt,xcov = optimize.curve_fit(f.fit,s[0],s[1],sigma=s[2],absolute_sigma=True,bounds=bounds)
+    xopt,xcov = optimize.curve_fit(quadratic_fit,s[0],s[1],sigma=s[2],absolute_sigma=True,bounds=bounds)
     #yopt,ycov = optimize.curve_fit(quadratic_fit,sy[0],sy[1],sigma=sy[2],absolute_sigma=True)
 
     
@@ -105,12 +107,13 @@ def fit(s,L,l,bounds=None,plotting=False,axis=0):
         ax.set_xlabel('$\kappa [m^{-2}]$')
         ax.set_ylabel('$\sigma^2 [m^2]$')
 
+    sigma = get_beam_matrix(xopt,xcov,L,l)
         
-    logging.info('sigma fit: {}'.format(xopt))
+    logging.info('sigma fit: {}'.format(sigma))
     logging.info('Confidence: {}'.format(xcov))
 
-    
-    return np.array(((xopt[0],xopt[1]),(xopt[1],xopt[2])))
+    return sigma
+    #return np.array(((xopt[0],xopt[1]),(xopt[1],xopt[2])))
 
 class FitFunction:
     def __init__(self,L,l,axis):
@@ -123,7 +126,9 @@ class FitFunction:
             self.m = -1
         
     def fit(self,x,s11,s21,s22):
-        return s11*(x*self.L*self.l - self.m*1)**2 + self.L*((2-2*x*self.m*self.l*self.L)*s21 + self.L*s22)
+        return s11*(x*self.L*self.l + self.m*1)**2 + \
+            2*self.L*(1+x*self.m*self.l*self.L)*s21 + \
+            (self.L**2)*s22
 
 
 def radiabeam_quad_current_to_gradient(current):
@@ -138,23 +143,17 @@ def peach_quad_c2g(current):
 def quadratic_fit(x,a,b,c):
     return a*x**2 + b*x + c
 
-def explicit_fit(x,s11,s21,s22):
-    l = 0.1
-    L = 0.457
-    return s11*(x*L*l - 1)**2 + L*((2-2*x*l*L)*s21 + L*s22)
-
 def get_beam_matrix(opt,cov,L,l):
     #calculate the beam matrix elements (along with errors) of beam matrix
     s11 = opt[0] / (L*l)**2
-    s21 = -(opt[1] + 2*L*l*s11) / (2 * L**2 * l)
-    s22 = (opt[2] - s11 - 2*L*s21) / L **2
+    s21 = (opt[1] - 2*L*l*s11) / (2 * L**2 * l)
+    s22 = (opt[2] - s11 - 2*L*s21) / (L**2)
 
-    errors = np.sqrt(cov.diagonal())
-    es11 = errors[0] / (L*l)**2
-    es21 = errors[1] / (2*l*L**2) + es11 / L
-    es22 = errors[2] / L**2 + 2*es21 / L + es11 / L**2
-
-    
-    logging.info('Error of beam matrix @ quad: {}'.format((es11,es21,es22)))
+#    errors = np.sqrt(cov.diagonal())
+#    es11 = errors[0] / (L*l)**2
+#    es21 = errors[1] / (2*l*L**2) + es11 / L
+#    es22 = errors[2] / L**2 + 2*es21 / L + es11 / L**2
+   
+#    logging.info('Error of beam matrix @ quad: {}'.format((es11,es21,es22)))
         
     return np.asfarray(((s11,s21),(s21,s22)))
