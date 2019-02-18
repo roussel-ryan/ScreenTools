@@ -7,6 +7,7 @@ from matplotlib.patches import Ellipse
 
 from . import analysis
 from . import utils
+from . import current
 
 class ScreenFigure(Figure):
     def __init__(self,*args,**kwargs):
@@ -67,12 +68,13 @@ def plot_screen(filename,dataset = '/img',frame_number=0,fig=None,scaled=False):
         ax.set_aspect('equal')
         ax.set_xlabel('x [m]')
         ax.set_ylabel('y [m]')
+        fig.scaled = True
     else:
         ax.imshow(data,origin='lower')
+        fig.scaled = False
     ax.set_title('{} {}'.format(filename,name))
     fig.filename = filename
     fig.frame_number = frame_number
-    fig.scaled = True
     fig.dataset = dataset
     
     #logging.debug(ax.screen_name)
@@ -120,7 +122,7 @@ def plot_charge(filename):
     bc = (be[1:]+be[:-1]) / 2
     axes[1].plot(bc,h)
 
-def overlay_projection(figure,axis=0):
+def add_projection(figure,axis=0):
     '''
     overlay a projection (lineout) onto a image plot
 
@@ -151,7 +153,29 @@ def overlay_projection(figure,axis=0):
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
-def overlay_ellipse(figure):
+def add_stats(figure):
+    ax = figure.axes[0]
+    moments = analysis.get_frame_moments(figure.filename,figure.frame_number)
+    charge = current.get_frame_charge(figure.filename,figure.frame_number)
+
+    std_x = np.sqrt(moments[1][0][0])
+    std_y = np.sqrt(moments[1][1][1])
+    
+    if figure.scaled:
+        data = (std_x,std_y)
+        label = 'Image Stats\n $\sigma_x$: {:10.3} \n $\sigma_y$: {:10.3}\n Charge:\n'.format(*data)
+
+    else:
+        ps = utils.get_attr(figure.filename,'pixel_scale')
+        data = (std_x / ps,std_y / ps)
+        label = 'Image Stats\n $\sigma_x$: {:5.3g} \n $\sigma_y$: {:5.3g}\n Charge:\n'.format(*data)
+
+    for ele in charge:
+        label = label + '{:10.2g} nC\n'.format(ele*1e9)
+
+    ax.text(0.95,0.95,label[:-1],horizontalalignment = 'right',verticalalignment = 'top',transform = ax.transAxes,backgroundcolor = 'white')
+    
+def add_ellipse(figure):
     filename = figure.filename
     frame_number = figure.frame_number
     ax = figure.axes[0]

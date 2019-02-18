@@ -89,7 +89,7 @@ def fit(s,L,l,bounds=None,plotting=False,axis=0):
     
     if bounds==None:
         bounds = ((-np.inf,-np.inf,-np.inf),(np.inf,np.inf,np.inf))
-    xopt,xcov = optimize.curve_fit(quadratic_fit,s[0],s[1],sigma=s[2],absolute_sigma=True,bounds=bounds)
+    xopt,xcov = optimize.curve_fit(f.fit,s[0],s[1],sigma=s[2],absolute_sigma=True,bounds=bounds)
     #yopt,ycov = optimize.curve_fit(quadratic_fit,sy[0],sy[1],sigma=sy[2],absolute_sigma=True)
 
     
@@ -107,8 +107,9 @@ def fit(s,L,l,bounds=None,plotting=False,axis=0):
         ax.set_xlabel('$\kappa [m^{-2}]$')
         ax.set_ylabel('$\sigma^2 [m^2]$')
 
-    sigma = get_beam_matrix(xopt,xcov,L,l)
-        
+    #sigma = get_beam_matrix(xopt,xcov,L,l)
+    sigma = np.array(((xopt[0],xopt[1]),(xopt[1],xopt[2])))
+    
     logging.info('sigma fit: {}'.format(sigma))
     logging.info('Confidence: {}'.format(xcov))
 

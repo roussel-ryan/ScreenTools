@@ -54,6 +54,15 @@ class ImageBox:
         v0 = self.center - self.size / 2
         v1 = self.center + self.size / 2
         return [v0[0],v1[0],v0[1],v1[1]]
+
+def quick_process(files):
+
+    for f in files:
+        mask_file(f)
+        filter_file(f)
+    for f in files:
+        threshold_file(f,manual=True)
+    
     
 def mask_file(h5file):
     '''
@@ -93,27 +102,13 @@ def crop_image(h5file,t = 'rectangle',frame_number=0):
     elif t == 'circle':
         c = cropping.ManualCircleCrop(h5file,frame_number)
 
-def aperature_array(array,center,radius,plotting = False):
-    data = []
-    r = np.linspace(0,radius)
-    
-    
-    for radius in r:
-        mask = get_mask(array,center,radius)
-        data.append([radius,np.sum(ma.array(array,mask = mask))])
-    ndata = np.asfarray(data).T
-
-    if plotting:
-        fig,ax = plt.subplots()
-        ax.plot(ndata[0],ndata[1])
-    
 def filter_array(array,sigma=1,size=4):
     ''' apply a median filter and a gaussian filter to image'''
     ndata = ndimage.median_filter(array,size)
     return ndata
     #return ndimage.gaussian_filter(ndata,sigma)
     
-def filter_file(h5file,filter_high_res = False):
+def filter_file(h5file):
     '''filtering'''
     if not utils.get_attr(h5file,'filtered'):
         with h5py.File(h5file,'r+') as f:

@@ -7,7 +7,6 @@ import h5py
 import logging
 
 from . import plotting
-from . import YAG
 
 class ScreenFinder:
     def __init__(self, filename):
