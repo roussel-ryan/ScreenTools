@@ -89,7 +89,7 @@ def fit(s,L,l,bounds=None,plotting=False,axis=0):
     f = FitFunction(L,l,axis)
     
     if bounds==None:
-        bounds = ((-np.inf,-np.inf,-np.inf),(np.inf,np.inf,np.inf))
+        bounds = ((0.0,-np.inf,-np.inf),(np.inf,np.inf,np.inf))
     xopt,xcov = optimize.curve_fit(f.fit,s[0],s[1],sigma=s[2],absolute_sigma=True,bounds=bounds)
     #yopt,ycov = optimize.curve_fit(quadratic_fit,sy[0],sy[1],sigma=sy[2],absolute_sigma=True)
 

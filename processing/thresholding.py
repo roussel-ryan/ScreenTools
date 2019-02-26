@@ -74,7 +74,7 @@ def set_threshold(h5file,level = 0,frame_number=-1):
                 datagrp = f['/{}'.format(i)]
                 logging.debug('setting threshold of image {} to {}'.format(i,level))
                 datagrp.attrs['threshold'] = level
-
+                
         else:
             logging.info('Setting threshold level of all frames to based on calcuations in file {}'.format(h5file))
             for i in frames:                
@@ -82,7 +82,6 @@ def set_threshold(h5file,level = 0,frame_number=-1):
                 threshold = calculate_threshold(dataset)
                 logging.debug('setting threshold of image {} to {}'.format(i,threshold)) 
                 f['/{}'.format(i)].attrs['threshold'] = threshold
-            
 
 def apply_threshold(h5file,frame_number=-1):
     with h5py.File(h5file,'r+') as f:
@@ -91,9 +90,11 @@ def apply_threshold(h5file,frame_number=-1):
         else:
             frames = [frame_number]
             
+            
         for i in frames:
             dataset = f['/{}/img'.format(i)]
             threshold = f['/{}'.format(i)].attrs['threshold']
+            logging.debug('applying threshold of {} to frame number {}'.format(threshold,i))
             dataset[...] = np.where(dataset[:] > threshold,dataset[:],0)
     
 class ManualThresholdSelector:

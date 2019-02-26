@@ -42,7 +42,7 @@ def get_frames(filename,constraints=None):
 
 
 
-    if not len(good_frames) == nframes:
+    if not len(good_frames) == nframes - 1:
         logging.info('Cutting frames in file {}, percentage remaining:{:.2f}'.format(filename,100 * (len(good_frames)/nframes)))
         
     return good_frames
