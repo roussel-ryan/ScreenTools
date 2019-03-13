@@ -16,6 +16,7 @@ from . import current
 from .processing import thresholding
 
 
+
 def fit_quad_scan(path,L,l,Bp,current_to_gradient_func,constraints = None,plotting = False,overwrite = False,base_filename = ('QUADSCAN_','_img.h5'),axis=0,save_points=False,reverse_polarity=False,bounds=None):
     '''
     use a quad scan about a waist position to calcuate 
@@ -88,7 +89,8 @@ def fit(s,L,l,bounds=None,plotting=False,axis=0):
     f = FitFunction(L,l,axis)
     
     if bounds==None:
-        bounds = ((-np.inf,-np.inf,-np.inf),(np.inf,np.inf,np.inf))
+        bounds = ((0.0,-np.inf,-np.inf),(np.inf,np.inf,np.inf))
+
     xopt,xcov = optimize.curve_fit(f.fit,s[0],s[1],sigma=s[2],absolute_sigma=True,bounds=bounds)
     #yopt,ycov = optimize.curve_fit(quadratic_fit,sy[0],sy[1],sigma=sy[2],absolute_sigma=True)
 

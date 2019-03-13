@@ -102,8 +102,14 @@ def threshold_file(h5file,level=0,manual=False,overwrite=False,plotting=False):
             
     if not is_thresholded or overwrite:
         frames = utils.get_frames(h5file)
-        for frame in frames:
-            threshold_frame(h5file,frame_number = frame,manual=manual, level=level)
+        if manual:
+            thresholding.ManualThresholdSelector(h5file,0)
+            m = utils.get_attr(h5file,'threshold','/0')
+            thresholding.set_threshold(h5file,m)
+        else:
+            thresholding.set_threshold(h5file,level)
+            
+        thresholding.apply_threshold(h5file)
     return h5file
 
 def crop_image(h5file,t = 'rectangle',frame_number=0):
@@ -121,9 +127,15 @@ def filter_array(array,sigma=1,size=4):
 def filter_frame(h5file,frame_number):
     with h5py.File(h5file,'r+') as f:
         dataset = f['/{}/img'.format(frame_number)]
-        narray = filter_array(dataset[:])
-        dataset[...] = narray
-        dataset.attrs['filtered'] = 1
+        try:
+            filtered_already = dataset.attrs['filtered']
+        except KeyError:
+            filtered_already = False
+            
+        if not filtered_already:
+            narray = filter_array(dataset[:])
+            dataset[...] = narray
+            dataset.attrs['filtered'] = 1
     
 def filter_file(h5file):
     '''filtering'''
@@ -141,7 +153,9 @@ def reset_frame(h5file,frame_number=0):
         raw = f['/{}/raw'.format(frame_number)][:]
 
         f.create_dataset('/{}/img'.format(frame_number),data=raw)
-        f['/{}/'.format(frame_number)].attrs['threshold'] = 0.0
+        f['/{}/'.format(frame_number)].attrs['threshold'] = 0
+        f['/{}/'.format(frame_number)].attrs['filtered'] = 0
+        
         
 def reset_file(h5file):
     logging.info('resetting file {}'.format(h5file))
