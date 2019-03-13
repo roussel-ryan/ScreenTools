@@ -59,48 +59,57 @@ def calculate_threshold(array,plotting = False):
 def plot_threshold(h5file):
     with h5py.File(h5file) as f:
         calculate_threshold(f['/0/img'][:],plotting=True)
-
-def set_threshold(h5file,level = 0):
+        
+def set_threshold(h5file,level = 0,frame_number=-1):
     with h5py.File(h5file,'r+') as f:
-        f['/'].attrs['global_threshold'] = level
-        frames = f.attrs['nframes']
+        if frame_number == -1:
+            frames = utils.get_frames(h5file)
+            f['/'].attrs['global_threshold'] = level
+        else:
+            frames = [frame_number]
+
         if level:
             logging.info('Setting threshold level of all frames to {} in file {}'.format(level,h5file))
-            for i in range(frames-1):
+            for i in frames:
                 datagrp = f['/{}'.format(i)]
                 logging.debug('setting threshold of image {} to {}'.format(i,level))
                 datagrp.attrs['threshold'] = level
 
         else:
             logging.info('Setting threshold level of all frames to based on calcuations in file {}'.format(h5file))
-            for i in range(frames-1):                
+            for i in frames:                
                 dataset = f['/{}/img'.format(i)][:]
                 threshold = calculate_threshold(dataset)
                 logging.debug('setting threshold of image {} to {}'.format(i,threshold)) 
                 f['/{}'.format(i)].attrs['threshold'] = threshold
-                
-                
-def apply_threshold(h5file):
+            
+
+def apply_threshold(h5file,frame_number=-1):
     with h5py.File(h5file,'r+') as f:
-        frames = f.attrs['nframes']
-        logging.info('Applying thresholds to file {}'.format(h5file))
-        for i in range(frames-1):
+        if frame_number==-1:
+            frames = utils.get_frames(h5file)
+        else:
+            frames = [frame_number]
+            
+        for i in frames:
             dataset = f['/{}/img'.format(i)]
             threshold = f['/{}'.format(i)].attrs['threshold']
-            logging.debug('Thresholding image {} at {}'.format(i,threshold))
             dataset[...] = np.where(dataset[:] > threshold,dataset[:],0)
-
-
+    
 class ManualThresholdSelector:
-    def __init__(self,filename):
+    def __init__(self,filename,frame_number=-1):
         '''set threshold of file with a manual clicking that averages the height'''
-        logging.info('Manual selection of threshold chosen')
+        logging.info('Manual selection of threshold chosen using frame {}'.format(frame_number))
         self.filename = filename
         #load image array
         with h5py.File(self.filename) as f:
-            self.data = f['/0/img'][:]
-            self.orig = self.data
-            
+            if frame_number == -1:
+                self.data = f['/0/img'][:]
+                self.frame_number = -1
+            else:
+                self.data = f['/{}/img'.format(frame_number)][:]
+                self.frame_number = frame_number
+                
         fig,ax = plt.subplots()
         fig.suptitle('Click to select threshold points,SPACE to exit and set threshold\n,BACKSPACE to delete last point')
         self.im = ax.imshow(self.data)
@@ -136,7 +145,7 @@ class ManualThresholdSelector:
         
     def key_press(self,event):
         if event.key == ' ':
-            set_threshold(self.filename,level=np.max(np.asfarray(self.threshold)))
+            set_threshold(self.filename,level=np.max(np.asfarray(self.threshold)),frame_number=self.frame_number)
             plt.close(self.ax.figure)
 
         if event.key == 'backspace':

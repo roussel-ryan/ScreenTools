@@ -36,11 +36,37 @@ def get_mask(array,center,radius):
         
     return mask
 
-def mask_file(h5file):
+def remove_empty_space(narray):
+    #remove all cols and rows where every value is masked
+    narray = narray[:, ~np.all(narray.mask, axis=0)].T
+    narray = narray[:, ~np.all(narray.mask, axis=0)].T
+    return narray    
+
+def mask_frame(h5file,frame_number):
+    with h5py.File(h5file,'r+') as f:
+        center = f.attrs['screen_center']
+        radius = f.attrs['screen_radius']
+            
+        dataset = f.get('/{}/img'.format(frame_number))
+        narray = np.array(dataset)
+        mask = get_mask(narray,center,radius)
+
+        narray = ma.array(narray,mask = mask)
+        narray = remove_empty_space(narray)
+               
+        #fill masked values with zeros
+        narray = ma.filled(narray,0)
+
+        del f['/{}/img'.format(frame_number)]
+                
+        f.create_dataset('/{}/img'.format(frame_number),data=narray)
+
+
+def mask_file(h5file,frame_number=-1):
     '''
     masks all images in <h5file>
     '''
-
+    logging.debug('masking file {}'.format(h5file))
     with h5py.File(h5file,'r+') as f:
         try:
             m = f.attrs['masked']
@@ -58,7 +84,13 @@ def mask_file(h5file):
             
             logging.info('Doing masking of file: {}'.format(h5file))
 
-            for i in range(frames-1):
+            if frame_number==-1:
+                frames = utils.get_frames(h5file)
+            else:
+                frames = [frame_number]
+
+            
+            for i in frames:
                 logging.debug('Doing masking of file: {}, frame: {}'.format(h5file,i))
                 dataset = f.get('/{}/img'.format(i))
                 narray = np.array(dataset)
@@ -79,7 +111,8 @@ def mask_file(h5file):
             f.attrs['dx'] = narray.shape[0]
             f.attrs['dy'] = narray.shape[1]
             #f.attrs['screen_center'] = [int(narray.shape[0]/2),int(narray.shape[1]/2)]
-            f.attrs['masked'] = 1
+            if frame_number==-1:
+                f.attrs['masked'] = 1
         else:
             logging.info('File {} is already masked'.format(h5file))
     return None

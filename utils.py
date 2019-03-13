@@ -13,7 +13,7 @@ def get_frames(filename,constraints=None):
     '''
     #check constraints
     if constraints == None:
-        constraints = [constraint.NullConstraint]
+        constraints = [constraint.NullConstraint()]
     elif isinstance(constraints,list):
         for ele in constraints:
             if not isinstance(ele,constraint.Constraint):
@@ -30,7 +30,7 @@ def get_frames(filename,constraints=None):
         for i in range(nframes - 1):
             good = True
             for c in constraints:
-                #logging.debug(c)
+                #logging.debug(c.name)
                 if not c.evaluate(f,i):
                     good = False
                         #if it survives then add to good frames
