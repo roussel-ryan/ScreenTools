@@ -1,5 +1,8 @@
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+from matplotlib.axes import Axes
+from matplotlib.projections import register_projection
+
 import numpy as np
 import h5py
 import logging
@@ -9,24 +12,29 @@ from . import analysis
 from . import utils
 from . import current
 
-class ScreenFigure(Figure):
+
+class ScreenAxes(Axes):
+    '''Subclassing matplotlib Axes object to add custom attributes'''
+    name = 'ScreenAxes'    
     def __init__(self,*args,**kwargs):
-        Figure.__init__(self,*args,**kwargs)
+        Axes.__init__(self,*args,**kwargs)
         self.filename = kwargs.pop('filename','')
         self.dataset = kwargs.pop('dataset','/img')
         self.frame_number = kwargs.pop('frame_number',0)
         self.scaled = kwargs.pop('scaled',False)
 
-def create_screen_figure(**kwargs):
-    fig = plt.figure(FigureClass=ScreenFigure,**kwargs)
-    ax = fig.add_subplot(111)
-    return fig,ax
+register_projection(ScreenAxes)
+
+def subplots(col,row,**kwargs):
+    ''' wrapper for creating suplots fig, axes with ScreenAxes object'''
+    return plt.subplots(col,row,subplot_kw=dict(projection='ScreenAxes'),**kwargs)
         
 def check_axes(axes):
     if axes:
         return axes
     else:
-        fig,ax = create_screen_figure()
+        fig = plt.figure()
+        ax = fig.add_subplot(111,projection='ScreenAxes')
         return ax
 
 def check_fig(fig):
@@ -36,7 +44,7 @@ def check_fig(fig):
         fig,ax = create_screen_figure()
         return fig
 
-def plot_screen(filename,dataset = '/img',frame_number=0,fig=None,scaled=False):
+def plot_screen(filename,dataset = '/img',frame_number=0,ax=None,scaled=False,normalize = False,**kwargs):
     '''
     Plot screen image for a given frame
     
@@ -54,32 +62,36 @@ def plot_screen(filename,dataset = '/img',frame_number=0,fig=None,scaled=False):
 
     '''
 
-    fig = check_fig(fig)
-    ax = fig.axes[0]
+    #fig = check_fig(fig)
+    ax = check_axes(ax)
 
     logging.info('plotting file {}, image # {}'.format(filename,frame_number))
     name = '/{}{}'.format(frame_number,dataset)
     with h5py.File(filename,'r') as f:
         data = f[name][:]
+
+    if normalize:
+        data = data/np.max(data)
+    
     shape = data.shape
     px_scale = utils.get_attr(filename,'pixel_scale')
     if scaled:
-        ax.imshow(data,extent = [-int(shape[1]/2)*px_scale,int(shape[1]/2)*px_scale,-int(shape[0]/2)*px_scale,int(shape[0]/2)*px_scale],origin='lower')
+        ax.imshow(data,extent = [-int(shape[1]/2)*px_scale,int(shape[1]/2)*px_scale,-int(shape[0]/2)*px_scale,int(shape[0]/2)*px_scale],origin='lower',**kwargs)
         ax.set_aspect('equal')
         ax.set_xlabel('x [m]')
         ax.set_ylabel('y [m]')
-        fig.scaled = True
+        ax.scaled = True
     else:
-        ax.imshow(data,origin='lower')
-        fig.scaled = False
+        ax.imshow(data,origin='lower',**kwargs)
+        ax.scaled = False
     ax.set_title('{} {}'.format(filename,name))
-    fig.filename = filename
-    fig.frame_number = frame_number
-    fig.dataset = dataset
+    ax.filename = filename
+    ax.frame_number = frame_number
+    ax.dataset = dataset
     
     #logging.debug(ax.screen_name)
     
-    return fig
+    return ax
 
 def plot_current(filename,frame_number=0,ax=None):
     '''
@@ -122,7 +134,7 @@ def plot_charge(filename):
     bc = (be[1:]+be[:-1]) / 2
     axes[1].plot(bc,h)
 
-def add_projection(figure,axis=0):
+def add_projection(ax,axis=0):
     '''
     overlay a projection (lineout) onto a image plot
 
@@ -134,22 +146,23 @@ def add_projection(figure,axis=0):
     axis          0 for horizontal lineout, 1 for vertical axis lineout
 
     '''
-    filename = figure.filename
-    frame_number = figure.frame_number
-    ax = figure.axes[0]
+    filename = ax.filename
+    frame_number = ax.frame_number
+    #ax = figure.axes[0]
     
     lineout = analysis.get_projection(filename,frame_number,axis)
+    lineout = lineout / np.max(lineout)
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
 
     logging.debug(xlim)
     logging.debug(ylim)
     if axis == 0:
-        ax2 = ax.twinx()
-        ax2.plot(np.linspace(*xlim,len(lineout)),lineout)
+        ext = ylim[1] - ylim[0]
+        ax.plot(np.linspace(*xlim,len(lineout)),lineout*0.25*ext + ylim[0])
     elif axis == 1:
-        ax2 = ax.twiny()
-        ax2.plot(lineout,np.linspace(ylim[0],ylim[1],len(lineout)))
+        ext = xlim[1] - xlim[0]
+        ax.plot(lineout*0.25*ext + xlim[0],np.linspace(ylim[0],ylim[1],len(lineout)))
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
@@ -175,7 +188,7 @@ def add_stats(figure):
 
     ax.text(0.95,0.95,label[:-1],horizontalalignment = 'right',verticalalignment = 'top',transform = ax.transAxes,backgroundcolor = 'white')
     
-def add_ellipse(figure):
+def add_ellipse(ax):
     filename = figure.filename
     frame_number = figure.frame_number
     ax = figure.axes[0]
@@ -196,7 +209,22 @@ def add_ellipse(figure):
     ell.set_linewidth(1)
     ax.add_artist(ell)
 
+def add_meanline(ax,axis=0):
+    filename = ax.filename
+    frame_number = ax.frame_number
+    line = analysis.get_mean_line(filename,frame_number,axis=axis)
+    if axis:
+        ax.plot(line[1],line[0])
+    else:
+        ax.plot(line[0],line[1])
 
+def add_contours(ax,levels=10):
+    filename = ax.filename
+    frame_number = ax.frame_number
+    data = utils.get_frame_image(filename,frame_number)
+    c = ax.contour(data,levels=levels,linewidth=10)
+    return c
+    
 def plot_charge_histogram(filename,constraints=None):
     charge = []
     frames = utils.get_frames(filename,constraints)

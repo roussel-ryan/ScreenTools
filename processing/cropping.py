@@ -8,6 +8,37 @@ from matplotlib.widgets import RectangleSelector
 from .. import utils
 from .. import plotting
 
+def rectangle_crop(fname,rectangle_extent,frame_number=-1):
+    '''
+    set all data elements outside of rectange_extent to zero
+    for use with RectangleSelector extent attribute
+    rectangle_extent = [x_min,x_max,y_min,y_max]
+    '''
+    with h5py.File(fname,'r+') as f:
+        if frame_number == -1:
+            frames = range(f.attrs['nframes'])
+        else:
+            frames = [frame_number]
+        
+        for frame in frames:
+            dataset = f['/{}/img'.format(frame)]
+            data = dataset[:]
+            shape = data.shape
+            mask = np.ones_like(data)
+
+            for i in range(shape[0]):
+                for j in range(shape[1]):
+                    in_x = (i <= rectangle_extent[3]) and (i > rectangle_extent[2])
+                    in_y = (j <= rectangle_extent[1]) and (j > rectangle_extent[0])
+
+                    if in_x and in_y:
+                        mask[i][j] = 0
+                    
+            new_array = np.ma.array(data,mask = mask)
+            new_array = np.ma.filled(new_array,0)
+            dataset[...] = new_array
+            
+
 class ManualCircularCrop:
     def __init__(self,filename,frame_number = 0):
         '''set all elements outside of selcected circle to zero'''
@@ -133,36 +164,10 @@ class ManualRectangleCrop:
         logging.debug("(%3.2f, %3.2f) --> (%3.2f, %3.2f)" % (x1, y1, x2, y2))
         logging.debug(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
-    def crop(self):
-        shape = self.data.shape
-        ext = self.RS.extents
-        logging.debug(ext)
-        logging.debug(shape)
-        mask = np.ones_like(self.data)
-
-        for i in range(shape[0]):
-            for j in range(shape[1]):
-                in_x = (i <= ext[3]) and (i > ext[2])
-                in_y = (j <= ext[1]) and (j > ext[0])
-
-                if in_x and in_y:
-                    #logging.debug('{} {} in rect'.format(i,j))
-                    mask[i][j] = 0
-                    
-        new_array = np.ma.array(self.data,mask = mask)
-        new_array = np.ma.filled(new_array,0)
-
-        fig,ax = plt.subplots()
-        ax.imshow(new_array)
-        plt.show()
-        
-        with h5py.File(self.filename,'r+') as f:
-            dataset = f['/{}/img'.format(self.frame_number)]
-            dataset[...] = new_array
-        
+    def get_rectangle_extent(self):
+        return self.RS.extents
         
     def key_press(self,event):
         logging.debug(event.key)
         if event.key == ' ':
-            self.crop()
             plt.close(self.ax.figure)

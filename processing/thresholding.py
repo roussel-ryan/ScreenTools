@@ -41,24 +41,31 @@ def calculate_threshold(array,plotting = False):
 
     if plotting:
         fig,ax = plt.subplots()
-        ax.plot(threshold/np.max(threshold),ndata/np.max(ndata))
+        l1, = ax.plot(threshold/np.max(threshold),ndata/np.max(ndata),'g',label='Image fraction')
+        ax.set_xlabel('Fractional threshold level')
+        ax.set_ylabel('Remaining image fraction')
         ax2 = ax.twinx()           
-        ax2.plot(threshold/np.max(threshold),d)
-        ax2.plot(threshold/np.max(threshold),dd)
-        ax.axvline(threshold[correct_index]/np.max(threshold),ls='--')
+        l2, = ax2.plot(threshold/np.max(threshold),d,label='Deriv(Image fraction)')
+        l3, = ax2.plot(threshold/np.max(threshold),dd,label='DblDeriv(Image fraction)')
+        l4 = ax.axvline(threshold[correct_index]/np.max(threshold),ls='--',label='Chosen threshold level')
+
+        ls = [l1,l2,l3,l4]
+        lbls = [l.get_label() for l in ls]
+        ax.legend(ls,lbls,loc=7)
+        
         result = np.where(array > threshold[correct_index],array,0.0)
-
-        fig2,ax2 = plt.subplots()
-        ax2.imshow(array)
-
-        fig3,ax3 = plt.subplots()
-        ax3.imshow(result)
+        fig2,ax2 = plt.subplots(1,2)
+        fig2.suptitle('Thresholding results at lvl: {}'.format(threshold[correct_index]))
+        ax2[0].imshow(array)
+        ax2[0].set_title('Pre-thresholding')
+        ax2[1].imshow(result)
+        ax2[1].set_title('Post-thresholding')
         
     return threshold[correct_index]
 
-def plot_threshold(h5file):
+def plot_threshold(h5file,frame_number = 0):
     with h5py.File(h5file) as f:
-        calculate_threshold(f['/0/img'][:],plotting=True)
+        calculate_threshold(f['/{}/img'.format(frame_number)][:],plotting=True)
         
 def set_threshold(h5file,level = 0,frame_number=-1):
     with h5py.File(h5file,'r+') as f:

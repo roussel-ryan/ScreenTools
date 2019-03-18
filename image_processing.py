@@ -112,12 +112,26 @@ def threshold_file(h5file,level=0,manual=False,overwrite=False,plotting=False):
         thresholding.apply_threshold(h5file)
     return h5file
 
-def crop_image(h5file,t = 'rectangle',frame_number=0):
-    if t == 'rectangle':
-        c = cropping.ManualRectangleCrop(h5file,frame_number)
-    elif t == 'circle':
-        c = cropping.ManualCircleCrop(h5file,frame_number)
+def get_rect_crop(h5file,frame_number):
+    c = cropping.ManualRectangleCrop(h5file,frame_number)
+    return c.get_rectangle_extent()
 
+
+def crop_frame(h5file,extent = '',frame_number=0):
+    #add ability to recall cropping OR get cropped rectangle and use rectangle in the future to keep settings -Ryan
+    if extent == '':
+        extent = get_rect_crop(h5file,frame_number)
+    
+    cropping.rectangle_crop(h5file,extent,frame_number)
+
+def crop_file(h5file,extent=''):
+    if extent == '':
+        extent = get_rect_crop(h5file,0)
+        
+    cropping.rectangle_crop(h5file,extent,-1)
+
+        
+        
 def filter_array(array,sigma=1,size=4):
     ''' apply a median filter and a gaussian filter to image'''
     ndata = ndimage.median_filter(array,size)

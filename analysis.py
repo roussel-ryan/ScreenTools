@@ -82,7 +82,7 @@ def calculate_moments(filename,constraints=None):
 
     Outputs
     -------
-    filename    h5 file with image data and results
+    center_stats,moment_stats    h5 file with image data and results
     '''
     
     center_data = []
@@ -192,7 +192,31 @@ def get_averaged_projection(filename,constraint_functions=None):
     data = np.asfarray(data)
     avg = np.mean(data,axis=0).T
     return avg
+
+def get_mean_line(filename,frame_number,axis=0):
+    with h5py.File(filename) as f:
+        data = f['/{}/img'.format(frame_number)][:]
+
+    if not axis:
+        data = data.T
     
+    mean_line = np.zeros(len(data),dtype=np.int64)
+    for i in range(len(data)):
+        mean_line[i] = calculate_mean_index(data[i])
+
+    mean_line = np.ma.asarray(mean_line)
+    mean_line = np.ma.masked_where(mean_line < 1,mean_line)
+    mean_line = np.ma.asarray([range(len(data)),mean_line])
+    return mean_line
+
+def calculate_mean_index(line):
+    #make sure to use large data type > np.int64 as numbers are large
+    if np.sum(line) < 100000:
+        return 0
+    else:
+        return np.sum(np.multiply(line,np.arange(len(line))),dtype=np.int64) / np.sum(line)
+
+
 
     
 def get_2D_gauss_fit(filename,frame_number=0):

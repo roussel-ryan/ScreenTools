@@ -1,0 +1,21 @@
+import h5py
+from . import utils
+
+
+def add_plasma_state(h5file,first_frame_plasma_on = True):
+    #set plasma on/off state marker
+    if first_frame_plasma_on:
+        i = 1
+    else:
+        i = 0
+    
+    with h5py.File(h5file,'r+') as f:
+        frames = utils.get_frames(h5file)
+        for frame_number in frames:
+            f['/{}'.format(frame_number)].attrs['plasma_on'] = (frame_number + i) % 2
+
+def match_plasma_state(h5file,frame_number,state):
+    return state == get_plasma_state(h5file,frame_number)
+            
+def get_plasma_state(h5file,frame_number):
+    return h5file['/{}'.format(frame_number)].attrs['plasma_on']

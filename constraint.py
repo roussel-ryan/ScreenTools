@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 from . import current
+from . import plasma
 
 #function class for creating and storing constraints used for data processing - to be used with utils.get_frames
 
@@ -37,5 +38,8 @@ class SelectChargeConstraint(Constraint):
     def __init__(self,lower_limit,upper_limit,ICT_channel=0):
         Constraint.__init__(self,current.selected_charge,'SelectChargeConstraint',lower_limit,upper_limit,ICT_channel)
 
+class PlasmaStateConstraint(Constraint):
+    def __init__(self,plasma_on=True):
+        Constraint.__init__(self,plasma.match_plasma_state,'PlasmaStateConstraint',plasma_on)
     
         

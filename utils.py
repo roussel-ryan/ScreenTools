@@ -47,6 +47,9 @@ def get_frames(filename,constraints=None):
         
     return good_frames
 
+def get_frame_image(filename,frame_number=0,dataset='/img'):
+    with h5py.File(filename) as f:
+        return f['/{}{}'.format(frame_number,dataset)][:]
                        
 def get_attr(filename,attr,dataset='/'):
     with h5py.File(filename,'r') as f:
