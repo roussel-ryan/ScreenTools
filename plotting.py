@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.projections import register_projection
+import matplotlib.gridspec as gridspec
 
 import numpy as np
 import h5py
@@ -44,7 +45,7 @@ def check_fig(fig):
         fig,ax = create_screen_figure()
         return fig
 
-def plot_screen(filename,dataset = '/img',frame_number=0,ax=None,scaled=False,normalize = False,**kwargs):
+def plot_screen(filename,raw=False,frame_number=0,ax=None,scaled=False,normalize = False, fast_plot=False,**kwargs):
     '''
     Plot screen image for a given frame
     
@@ -66,15 +67,29 @@ def plot_screen(filename,dataset = '/img',frame_number=0,ax=None,scaled=False,no
     ax = check_axes(ax)
 
     logging.info('plotting file {}, image # {}'.format(filename,frame_number))
+    if raw:
+        dataset = '/raw'
+    else:
+        dataset = '/img'
+
     name = '/{}{}'.format(frame_number,dataset)
     with h5py.File(filename,'r') as f:
         data = f[name][:]
 
     if normalize:
-        data = data/np.max(data)
+        #set data to be normalized and shifted so min nonzero is 0.0
+        #logging.info(np.min(data[np.nonzero(data)]))
+        data = data.astype('int32')
+        data = data - np.min(data[np.nonzero(data)])
+        data = np.where(data > 0.0,data,0*data)
+        data = data / np.max(data)
     
     shape = data.shape
     px_scale = utils.get_attr(filename,'pixel_scale')
+
+    if fast_plot:
+        data = data[::20,::20]
+    
     if scaled:
         ax.imshow(data,extent = [-int(shape[1]/2)*px_scale,int(shape[1]/2)*px_scale,-int(shape[0]/2)*px_scale,int(shape[0]/2)*px_scale],origin='lower',**kwargs)
         ax.set_aspect('equal')
@@ -91,6 +106,27 @@ def plot_screen(filename,dataset = '/img',frame_number=0,ax=None,scaled=False,no
     
     #logging.debug(ax.screen_name)
     
+    return ax
+
+def plot_all_frames(filename):
+    fig = plt.figure(figsize = (19.20,10.80))
+    size = 5
+    gs = gridspec.GridSpec(size,4*size)
+    gs.update(wspace=0.0,hspace = 0.0)
+
+    for i in range(4*size**2):
+        ax = plt.subplot(gs[i])
+        plot_screen(filename,frame_number=i,raw=False,ax = ax,fast_plot=True)
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_title('')
+        #ax.set_aspect('equal')
+    gs.tight_layout(fig)
+    
+def plot_background(filename):
+    fig,ax = plt.subplots()
+    with h5py.File(filename) as f:
+        ax.imshow(f['/background'][:],origin='lower')
     return ax
 
 def plot_current(filename,frame_number=0,ax=None):
@@ -111,30 +147,40 @@ def plot_current(filename,frame_number=0,ax=None):
     ax = check_axes(ax)
     with h5py.File(filename,'r') as f:
         data = f['/{}/current'.format(frame_number)][:]
+        charge = f['/{}'.format(frame_number)].attrs['charge']
 
     l = len(data)
     for i in range(1,l):
         ax.plot(data[0],data[i])
+
+    label = ''
+    for c in charge:
+        label = label + '{:10.4g} nC\n'.format(c*1e9)
+
+    ax.text(0.95,0.95,label[:-1],horizontalalignment = 'right',verticalalignment = 'top',transform = ax.transAxes,backgroundcolor = 'white')
     return ax
 
-def plot_charge(filename):
+def plot_charge(filename,constraints=None):
     '''
     plot sequential and distribution charge data
     '''
     fig,axes = plt.subplots(2,1)
     data = []
+    frames = utils.get_frames(filename,constraints)
+    
     with h5py.File(filename) as f:
-        for i in range(f['/'].attrs['nframes']-1):
+        for i in frames:
             data.append(f['/{}/'.format(i)].attrs['charge'])
 
-    data = np.asfarray(data)
-    axes[0].plot(data)
+    data = np.asfarray(data).T
+    for ele in data:
+        axes[0].plot(ele)
 
-    h,be = np.histogram(data,bins='auto')
-    bc = (be[1:]+be[:-1]) / 2
-    axes[1].plot(bc,h)
+        h,be = np.histogram(ele,bins='auto')
+        bc = (be[1:]+be[:-1]) / 2
+        axes[1].plot(bc,h)
 
-def add_projection(ax,axis=0):
+def add_projection(ax,axis=0,**kwargs):
     '''
     overlay a projection (lineout) onto a image plot
 
@@ -148,33 +194,37 @@ def add_projection(ax,axis=0):
     '''
     filename = ax.filename
     frame_number = ax.frame_number
-    #ax = figure.axes[0]
+    extent = ax.get_images()[0].get_extent()
     
     lineout = analysis.get_projection(filename,frame_number,axis)
     lineout = lineout / np.max(lineout)
-    xlim = ax.get_xlim()
-    ylim = ax.get_ylim()
+    xlim = extent[:2]
+    ylim = extent[2:]
+    #xlim = ax.get_xlim()
+    #ylim = ax.get_ylim()
 
     logging.debug(xlim)
     logging.debug(ylim)
     if axis == 0:
         ext = ylim[1] - ylim[0]
-        ax.plot(np.linspace(*xlim,len(lineout)),lineout*0.25*ext + ylim[0])
+        ax.plot(np.linspace(*xlim,len(lineout)),lineout*0.25*ext + ylim[0],**kwargs)
     elif axis == 1:
         ext = xlim[1] - xlim[0]
-        ax.plot(lineout*0.25*ext + xlim[0],np.linspace(ylim[0],ylim[1],len(lineout)))
+        ax.plot(lineout*0.25*ext + xlim[0],np.linspace(*ylim,len(lineout)),**kwargs)
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
-def add_stats(figure):
-    ax = figure.axes[0]
-    moments = analysis.get_frame_moments(figure.filename,figure.frame_number)
-    charge = current.get_frame_charge(figure.filename,figure.frame_number)
+def add_stats(ax):
+    filename = ax.filename
+    frame_number = ax.frame_number
+    
+    moments = analysis.get_frame_moments(filename,frame_number)
+    charge = current.get_charge(filename,frame_number)
 
     std_x = np.sqrt(moments[1][0][0])
     std_y = np.sqrt(moments[1][1][1])
     
-    if figure.scaled:
+    if ax.scaled:
         data = (std_x,std_y)
         label = 'Image Stats\n $\sigma_x$: {:10.3} \n $\sigma_y$: {:10.3}\n Charge:\n'.format(*data)
 
@@ -183,15 +233,15 @@ def add_stats(figure):
         data = (std_x / ps,std_y / ps)
         label = 'Image Stats\n $\sigma_x$: {:5.3g} \n $\sigma_y$: {:5.3g}\n Charge:\n'.format(*data)
 
-    for ele in charge:
-        label = label + '{:10.2g} nC\n'.format(ele*1e9)
+    for ele in charge[0]:
+        label = label + '{:10.4g} nC\n'.format(ele*1e9)
 
     ax.text(0.95,0.95,label[:-1],horizontalalignment = 'right',verticalalignment = 'top',transform = ax.transAxes,backgroundcolor = 'white')
     
 def add_ellipse(ax):
-    filename = figure.filename
-    frame_number = figure.frame_number
-    ax = figure.axes[0]
+    filename = ax.filename
+    frame_number = ax.frame_number
+    #ax = figure.axes[0]
 
     logging.debug('calcuating ellipse with file {} and frame number {}'.format(filename,frame_number))
     
@@ -212,11 +262,22 @@ def add_ellipse(ax):
 def add_meanline(ax,axis=0):
     filename = ax.filename
     frame_number = ax.frame_number
+    extent = ax.get_images()[0].get_extent()
+    xlim = extent[:2]
+    ylim = extent[2:]
+    xext = xlim[1] - xlim[0]
+    yext = ylim[1] - ylim[0]
+
     line = analysis.get_mean_line(filename,frame_number,axis=axis)
+    line = line/len(line)
+    
     if axis:
-        ax.plot(line[1],line[0])
+        ax.plot(line[1]*xext + xlim[0],line[0]*yext + ylim[0])
     else:
-        ax.plot(line[0],line[1])
+        ax.plot(line[0]*xext + xlim[0],line[1]*yext + ylim[0])
+
+    #ax.set_ylim(ylim)
+    #ax.set_xlim(xlim)
 
 def add_contours(ax,levels=10):
     filename = ax.filename

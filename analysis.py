@@ -173,7 +173,7 @@ def get_projection(filename,frame_number=0,axis=0,normalize=False,dataset='/img'
     else:
         return lineout
 
-def get_averaged_projection(filename,constraint_functions=None):
+def get_averaged_projection(filename,axis=0,constraints=None):
     '''
     calculate an averaged projection subject to constraint functions
 
@@ -184,14 +184,15 @@ def get_averaged_projection(filename,constraint_functions=None):
                              frames, see utils.get_frames
                              Default:None
     '''
-    frames = utils.get_frames(filename,constraint_function)
+    frames = utils.get_frames(filename,constraints)
     
     data = []
     for i in frames:
-        data.append(get_projection(filename,frame_number=i))
-    data = np.asfarray(data)
-    avg = np.mean(data,axis=0).T
-    return avg
+        data.append(get_projection(filename,frame_number=i,axis=axis))
+    data = np.vstack(data)
+    avg = np.mean(data,axis=0)
+    std = np.std(data,axis=0)
+    return np.asarray((avg,std))
 
 def get_mean_line(filename,frame_number,axis=0):
     with h5py.File(filename) as f:
@@ -206,9 +207,23 @@ def get_mean_line(filename,frame_number,axis=0):
 
     mean_line = np.ma.asarray(mean_line)
     mean_line = np.ma.masked_where(mean_line < 1,mean_line)
-    mean_line = np.ma.asarray([range(len(data)),mean_line])
+    #mean_line = np.ma.asarray([range(len(data)),mean_line])
     return mean_line
 
+def get_averaged_mean_line(filename,constraints=None,axis=0,frames=''):
+    if frames=='':
+        frames = utils.get_frames(filename,constraints)
+    
+    #mean_lines = get_mean_line(filename,frames[0],axis=axis)[1]
+    mean_lines = []
+    for frame in frames:
+        mean_lines.append(get_mean_line(filename,frame,axis=axis))
+
+    ml = np.ma.vstack(mean_lines)
+    mean_ml = np.ma.mean(ml,axis=0)
+    std_ml = np.ma.std(ml,axis=0)
+    return np.ma.asarray((mean_ml,std_ml))
+    
 def calculate_mean_index(line):
     #make sure to use large data type > np.int64 as numbers are large
     if np.sum(line) < 100000:

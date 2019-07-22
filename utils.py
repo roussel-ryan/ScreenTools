@@ -1,3 +1,4 @@
+
 import h5py
 import numpy as np
 import logging
@@ -14,7 +15,7 @@ def get_frames(filename,constraints=None):
     #check constraints
     if constraints == None:
         constraints = [constraint.NullConstraint()]
-    elif isinstance(constraints,list):
+    elif isinstance(constraints,list) or isinstance(constraints,tuple):
         for ele in constraints:
             if not isinstance(ele,constraint.Constraint):
                 logging.error('Error object {} not constraint!'.format(ele))
@@ -24,13 +25,14 @@ def get_frames(filename,constraints=None):
         logging.error('Error object {} not constraint!'.format(constraints))
 
     #apply constraints
+    logging.info('Constraints applied: {}'.format([c.name for c in constraints]))
     with h5py.File(filename) as f:
         nframes = f.attrs['nframes']
         good_frames = []
         for i in range(nframes - 1):
             good = True
+            logging.debug('Constraints results: {}:{}'.format(i,[c.evaluate(f,i) for c in constraints]))
             for c in constraints:
-                #logging.debug(c.name)
                 if not c.evaluate(f,i):
                     good = False
                         #if it survives then add to good frames
@@ -47,6 +49,15 @@ def get_frames(filename,constraints=None):
         
     return good_frames
 
+def check_frame_number(h5file,frame_number):
+    if frame_number == -1:
+        frames = get_frames(h5file)
+    elif isinstance(frame_number,list):
+        frames = frame_number
+    else:
+        frames = [frame_number]
+    return frames
+
 def get_frame_image(filename,frame_number=0,dataset='/img'):
     with h5py.File(filename) as f:
         return f['/{}{}'.format(frame_number,dataset)][:]
@@ -62,13 +73,13 @@ def get_attr(filename,attr,dataset='/'):
 def get_attrs(filename,dataset='/'):
     r = {}
     with h5py.File(filename,'r') as f:
-        for item,val in f.attrs.items():
+        for item,val in f[dataset].attrs.items():
             r[item] = val
     return r
 
 def print_attrs(filename,dataset='/'):
     logging.info(get_attrs(filename,dataset))
-
+    
 def get_files(path,file_ext):
     files = [f for f in listdir(path) if isfile(join(path,f))]
     dat_files = [join(path,f) for f in files if file_ext in f]

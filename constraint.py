@@ -25,10 +25,17 @@ class Constraint(object):
 def null_function(f,i):
     return True
 
+def bad_frame(f,i,frame_list):
+    return not (i in frame_list)
+
 #specific constraints
 class NullConstraint(Constraint):
     def __init__(self):
         Constraint.__init__(self,null_function,'NullConstraint')
+
+class BadFrameConstraint(Constraint):
+    def __init__(self,bad_frames):
+        Constraint.__init__(self,bad_frame,'BadFrameConstraint',bad_frames)
         
 class MeanChargeConstraint(Constraint):
     def __init__(self):

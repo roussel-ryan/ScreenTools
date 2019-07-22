@@ -8,6 +8,7 @@ from scipy import ndimage
 from .processing import thresholding
 from .processing import masking
 from .processing import cropping
+from .processing import background
 from . import utils
 
 
@@ -55,6 +56,7 @@ class ImageBox:
         v1 = self.center + self.size / 2
         return [v0[0],v1[0],v0[1],v1[1]]
 
+        
 def quick_process_file(files):
     for f in files:
         mask_file(f)
@@ -64,53 +66,59 @@ def quick_process_file(files):
 
 def quick_process_frame(f,frame_number):
     mask_frame(f,frame_number)
-    #filter_frame(f,frame_number)
+    filter_frame(f,frame_number)
     threshold_frame(f,frame_number=frame_number,manual=True)
     
-def mask_file(h5file):
-    '''
-    masks all images in <h5file>
-    '''
-    return masking.mask_file(h5file)
-
-def mask_frame(h5file,frame_number):
-    return masking.mask_frame(h5file,frame_number)
-
-def threshold_frame(h5file,manual=False,frame_number=-1,level=0):
-    if manual:
-        m = thresholding.ManualThresholdSelector(h5file,frame_number)
-    else:
-        thresholding.set_threshold(h5file,level,frame_number)
-
-    thresholding.apply_threshold(h5file,frame_number)
-
-def threshold_file(h5file,level=0,manual=False,overwrite=False,plotting=False):
-    logging.info('thresholding {}'.format(h5file))
-    with h5py.File(h5file) as f:
-        try:
-            a = f['/0'].attrs['threshold']
-            if a:
-                is_thresholded = True
-            else:
-                is_thresholded = False
-        except KeyError:
-            is_thresholded = False
-
-    if plotting:
-        thresholding.plot_threshold(h5file)
-        return h5file
-            
-    if not is_thresholded or overwrite:
-        frames = utils.get_frames(h5file)
-        if manual:
-            thresholding.ManualThresholdSelector(h5file,0)
-            m = utils.get_attr(h5file,'threshold','/0')
-            thresholding.set_threshold(h5file,m)
+def mask(*args,**kwargs):
+    masking.mask(*args,**kwargs)
+    
+def remove_background(h5file,frame_number=-1,overwrite=False):
+    
+    with h5py.File(h5file,'r+') as f:
+        bkgrnd = f['background'][:]
+        if frame_number == -1:
+            frames = utils.get_frames(h5file)
+            logging.info('removing background from all frames file:{}'.format(h5file))
         else:
-            thresholding.set_threshold(h5file,level)
+            frames = [frame_number]
+            logging.info('removing background from frame {}, file:{}'.format(frame_number,h5file))
             
-        thresholding.apply_threshold(h5file)
-    return h5file
+        for frame in frames:
+            dset = f['/{}/img'.format(frame)]
+            try:
+                bkgrnd_removed = dset.attrs['background_removed']
+            except KeyError:
+                bkgrnd_removed = 0
+            if (not bkgrnd_removed) or overwrite:
+                dset[...] = background.subtract_background(dset[:],bkgrnd)
+                dset.attrs['background_removed'] = 1
+
+
+def threshold(h5file,frame_number=-1,level=0):
+    if level == 0:
+        m = thresholding.ManualThresholdSelector(h5file,frame_number).threshold
+    else:
+        m = level
+
+    frames = utils.check_frame_number(h5file,frame_number)
+
+    apply_threshold(h5file,frames,m)
+
+def apply_threshold(h5file,frames,level):
+    with h5py.File(h5file,'r+') as f:
+        for ele in frames:
+            try:
+                grp = f['/{}'.format(ele)]
+                current_level = grp.attrs['threshold']
+            except KeyError:
+                current_level = 0
+
+            if level > current_level:
+                dataset = grp['img']
+                data = dataset[:]
+                dataset[...] = np.where(data > level,data,0)
+                grp.attrs['threshold'] = level
+    
 
 def get_rect_crop(h5file,frame_number):
     c = cropping.ManualRectangleCrop(h5file,frame_number)
@@ -160,25 +168,19 @@ def filter_file(h5file):
             logging.debug('filtering frame {}'.format(i))
             filter_frame(h5file,i)
                 
-def reset_frame(h5file,frame_number=0):
-    logging.debug('resetting image {}'.format(frame_number,h5file))
+def reset(h5file,frame_number=-1):
+    frames = utils.check_frame_number(h5file,frame_number)
+    logging.debug('resetting file {}, frames {}'.format(h5file,frames))
+    
     with h5py.File(h5file,'r+') as f:
-        del f['/{}/img'.format(frame_number)]
-        raw = f['/{}/raw'.format(frame_number)][:]
+        for ele in frames:
+            logging.debug('resetting frame {}'.format(ele))
+            grp = f['/{}'.format(ele)]
+            del grp['img']
+            raw = grp['raw'][:]
 
-        f.create_dataset('/{}/img'.format(frame_number),data=raw)
-        f['/{}/'.format(frame_number)].attrs['threshold'] = 0
-        f['/{}/'.format(frame_number)].attrs['filtered'] = 0
+            grp.create_dataset('img'.format(frame_number),data=raw)
+            grp.attrs['threshold'] = 0
+            grp.attrs['filtered'] = 0
+            grp.attrs['masked'] = 0
         
-        
-def reset_file(h5file):
-    logging.info('resetting file {}'.format(h5file))
-    for i in range(utils.get_attr(h5file,'nframes')-1):
-        reset_frame(h5file,i)
-    with h5py.File(h5file,'r+') as f:
-        names = ['filtered','background_removed','masked','global_threshold']
-        for name in names:
-            try:
-                del f.attrs[name]
-            except KeyError:
-                pass

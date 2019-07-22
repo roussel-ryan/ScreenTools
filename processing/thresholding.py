@@ -41,13 +41,13 @@ def calculate_threshold(array,plotting = False):
 
     if plotting:
         fig,ax = plt.subplots()
-        l1, = ax.plot(threshold/np.max(threshold),ndata/np.max(ndata),'g',label='Image fraction')
+        l1, = ax.plot(threshold,ndata/np.max(ndata),'g',label='Image fraction')
         ax.set_xlabel('Fractional threshold level')
         ax.set_ylabel('Remaining image fraction')
         ax2 = ax.twinx()           
-        l2, = ax2.plot(threshold/np.max(threshold),d,label='Deriv(Image fraction)')
-        l3, = ax2.plot(threshold/np.max(threshold),dd,label='DblDeriv(Image fraction)')
-        l4 = ax.axvline(threshold[correct_index]/np.max(threshold),ls='--',label='Chosen threshold level')
+        l2, = ax2.plot(threshold,d,label='Deriv(Image fraction)')
+        l3, = ax2.plot(threshold,dd,label='DblDeriv(Image fraction)')
+        l4 = ax.axvline(threshold[correct_index],ls='--',label='Chosen threshold level')
 
         ls = [l1,l2,l3,l4]
         lbls = [l.get_label() for l in ls]
@@ -121,10 +121,15 @@ class ManualThresholdSelector:
         fig.suptitle('Click to select threshold points,SPACE to exit and set threshold\n,BACKSPACE to delete last point')
         self.im = ax.imshow(self.data)
         self.ax = ax
+        self.orig = self.data
         
         self.points = [[0,0]]
         self.threshold = []
         self.line, = self.ax.plot(*self.points[0],'+')
+        self.xproj, = self.ax.plot(*self.points[0],'r')
+        self.yproj, = self.ax.plot(*self.points[0],'g')
+        
+        
         self.cid = self.ax.figure.canvas.mpl_connect('button_press_event',self.select_threshold)
         self.cid2 = self.ax.figure.canvas.mpl_connect('key_press_event', self.key_press)
         plt.show()
@@ -139,8 +144,20 @@ class ManualThresholdSelector:
 
         self.data = np.where(self.data > np.max(np.asfarray(self.threshold)),self.data,0.0)
         self.im.set_data(self.data)
+        self.update_projection()
         self.ax.figure.canvas.draw()
-
+        
+    def update_projection(self):
+        shape = self.data.shape
+        xp = np.sum(self.data,axis=0)
+        yp = np.sum(self.data.T,axis=0)
+        logging.info(shape)
+        logging.info(yp.shape)
+        logging.info(np.arange(shape[1]).shape)
+        
+        self.xproj.set_data(np.arange(shape[1]), shape[0]*0.25*xp/np.max(xp))
+        self.yproj.set_data(shape[1]*0.25*yp/np.max(yp),np.arange(shape[0]))
+        
     def remove_last_point(self):
         self.points = self.points[:-1]
         self.threshold = self.threshold[:-1]
@@ -148,11 +165,13 @@ class ManualThresholdSelector:
 
         self.data = np.where(self.orig > np.max(np.asfarray(self.threshold)),self.orig,0.0)
         self.im.set_data(self.data)
+        self.update_projection()
         self.ax.figure.canvas.draw()
         
     def key_press(self,event):
         if event.key == ' ':
-            set_threshold(self.filename,level=np.max(np.asfarray(self.threshold)),frame_number=self.frame_number)
+            self.threshold = np.max(np.asfarray(self.threshold))
+            #set_threshold(self.filename,level=np.max(np.asfarray(self.threshold)),frame_number=self.frame_number)
             plt.close(self.ax.figure)
 
         if event.key == 'backspace':

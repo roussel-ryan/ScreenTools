@@ -42,77 +42,53 @@ def remove_empty_space(narray):
     narray = narray[:, ~np.all(narray.mask, axis=0)].T
     return narray    
 
-def mask_frame(h5file,frame_number):
-    with h5py.File(h5file,'r+') as f:
-        center = f.attrs['screen_center']
-        radius = f.attrs['screen_radius']
-            
-        dataset = f.get('/{}/img'.format(frame_number))
-        narray = np.array(dataset)
-        mask = get_mask(narray,center,radius)
-
-        narray = ma.array(narray,mask = mask)
-        narray = remove_empty_space(narray)
-               
-        #fill masked values with zeros
-        narray = ma.filled(narray,0)
-
-        del f['/{}/img'.format(frame_number)]
-                
-        f.create_dataset('/{}/img'.format(frame_number),data=narray)
-
-
-def mask_file(h5file,frame_number=-1):
+def mask(h5file,frame_number=-1,overwrite=False):
     '''
     masks all images in <h5file>
     '''
-    logging.debug('masking file {}'.format(h5file))
+    #logging.debug('masking file {}'.format(h5file))
+    frames = utils.check_frame_number(h5file,frame_number)
+
     with h5py.File(h5file,'r+') as f:
+        #check which frames are not masked
+        unmasked = []
+        for ele in frames:
+            try:
+                m = f['/{}'.format(ele)].attrs['masked']
+                if overwrite:
+                    m = 0
+            except KeyError:
+                m = 0
+
+            if not m:
+                unmasked.append(ele)
+
+        #get masking array
+        frames = f.attrs['nframes']
+        center = f.attrs['screen_center']
+        radius = f.attrs['screen_radius']
+
         try:
-            m = f.attrs['masked']
-        except KeyError:
-            m = 0
-    
-        if not m:
-            frames = f.attrs['nframes']
-            center = f.attrs['screen_center']
-            radius = f.attrs['screen_radius']
-            
-            dataset = f.get('/0/img')
+            dataset = f['/{}/img'.format(unmasked[0])]
+        except IndexError:
+            logging.warning('No unmasked frames in {}'.format(h5file))
+            return None
+        
+        narray = np.array(dataset[:])
+        mask = get_mask(narray,center,radius)
+
+        for i in unmasked:
+            logging.debug('Doing masking of file: {}, frame: {}'.format(h5file,i))
+            grp = f['/{}'.format(i)]
+            dataset = grp['img'][:]
             narray = np.array(dataset)
-            mask = get_mask(narray,center,radius)
+            narray = ma.array(narray,mask = mask)
+            narray = remove_empty_space(narray)
+            narray = ma.filled(narray,0)
+                    
+            del grp['img']
             
-            logging.info('Doing masking of file: {}'.format(h5file))
-
-            if frame_number==-1:
-                frames = utils.get_frames(h5file)
-            else:
-                frames = [frame_number]
-
+            grp.create_dataset('img',data=narray)
+            grp.attrs['masked'] = 1
             
-            for i in frames:
-                logging.debug('Doing masking of file: {}, frame: {}'.format(h5file,i))
-                dataset = f.get('/{}/img'.format(i))
-                narray = np.array(dataset)
-                narray = ma.array(narray,mask = mask)
-                
-                #remove all cols and rows where every value is masked
-                narray = narray[:, ~np.all(narray.mask, axis=0)].T
-                narray = narray[:, ~np.all(narray.mask, axis=0)].T
-               
-                #fill masked values with zeros
-                narray = ma.filled(narray,0)
-
-                del f['/{}/img'.format(i)]
-                #dataset[...] = narray
-                
-                f.create_dataset('/{}/img'.format(i),data=narray)
-
-            f.attrs['dx'] = narray.shape[0]
-            f.attrs['dy'] = narray.shape[1]
-            #f.attrs['screen_center'] = [int(narray.shape[0]/2),int(narray.shape[1]/2)]
-            if frame_number==-1:
-                f.attrs['masked'] = 1
-        else:
-            logging.info('File {} is already masked'.format(h5file))
     return None

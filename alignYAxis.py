@@ -1,0 +1,49 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def alignYAxis(ax1, v1, ax2, v2):
+    """adjust ax2 ylimit so that v2 in ax2 is aligned to v1 in ax1"""
+    _, y1 = ax1.transData.transform((0, v1))
+    _, y2 = ax2.transData.transform((0, v2))
+    adjust_yaxis(ax2,(y1-y2)/2,v2)
+    adjust_yaxis(ax1,(y2-y1)/2,v1)
+
+def adjust_yaxis(ax,ydif,v):
+    """shift axis ax by ydiff, maintaining point v at the same location"""
+    inv = ax.transData.inverted()
+    _, dy = inv.transform((0, 0)) - inv.transform((0, ydif))
+    miny, maxy = ax.get_ylim()
+    miny, maxy = miny - v, maxy - v
+    if -miny>maxy or (-miny==maxy and dy > 0):
+        nminy = miny
+        nmaxy = miny*(maxy+dy)/(miny+dy)
+    else:
+        nmaxy = maxy
+        nminy = maxy*(miny+dy)/(maxy+dy)
+    ax.set_ylim(nminy+v, nmaxy+v)
+	
+def scaleYAxis(ax,pt,scale):
+	"""scale y axis limits s.t. pt value stays in the same place"""
+	yLimits  = ax.get_ylim()
+	yTopDiff = yLimits[1] - pt
+	yBottomDiff = pt - yLimits[0]
+	
+	ax.set_ylim([pt - yBottomDiff*scale,yTopDiff*scale + pt, ])
+	return ax
+	
+def shiftYAxes(ax1,ax2,shiftPer):
+	ax1.set_ylim(ax1.get_ylim() + shiftPer*(ax1.get_ylim()[1] - ax1.get_ylim()[0]))
+	ax2.set_ylim(ax2.get_ylim() + shiftPer*(ax2.get_ylim()[1] - ax2.get_ylim()[0]))
+	return ax1,ax2
+
+def matchZeros(ax1,ax2):
+    y1min,y1max = ax1.get_ylim()
+    y2min,y2max = ax2.get_ylim()
+    L1 = y1max - y1min
+    L2 = y2max - y2min
+    new_y2min = L2 * y1min / L1
+    new_y2max = new_y2min + L2
+    ax2.set_ylim(new_y2min,new_y2max)
+    return ax1,ax2
+    

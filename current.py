@@ -7,6 +7,12 @@ import os
 from . import utils
 from .processing import thresholding
 
+def fwhm(y):
+    x = range(len(y))
+    half_max = np.max(y) / 2
+    a = np.argwhere(y > half_max)
+    return x[np.max(a)] - x[np.min(a)]
+
 def add_current(h5filename,ICT_scale=[20,10,10,10],overwrite=False):
     '''
     adds current distribution from LeCroy to each image group
@@ -60,6 +66,7 @@ def add_current(h5filename,ICT_scale=[20,10,10,10],overwrite=False):
                 f.create_dataset('/{}/current'.format(i),data=dset.T)
         except RuntimeError:
             logging.error('File {} already has current data!'.format(h5filename))
+    get_charge(h5filename,overwrite=overwrite)
     return h5filename
 
 def add_ICT_scale(h5filename,scale):
@@ -67,60 +74,86 @@ def add_ICT_scale(h5filename,scale):
         f['/'].attrs['ICT_scale'] = scale
     
 
-def add_charge(h5filename,plotting=False):
+def get_charge(h5filename,frame_number=-1,constraints=None,plotting=False,overwrite=False):
     ''' add charge attribute to group if current dataset 
         is found
     '''
     data = []
     with h5py.File(h5filename) as f:
-        nframes = f.attrs['nframes']
+        if frame_number == -1:
+            frame_number = utils.get_frames(h5filename,constraints)
+        elif not isinstance(frame_number,list):
+            frame_number = [frame_number]
+            
         ICT_scale = 2.5*(10 / f.attrs['ICT_scale'])
-        for i in range(nframes):
+        for i in frame_number:
             try:
-                current = f['/{}/current'.format(i)][:]
-                #logging.debug(current)
-                #logging.debug(np.sum(current[1]))
-                #threshold data
-                t = current[0]
-                current = -current[1:]
-                tcurrent = []
-                for c in current:
-                    #threshold = thresholding.calculate_threshold(c)
-                    #tcurrent.append(np.where(c > threshold,c,0))
-                    tcurrent.append(c)
-                
-                charge = [np.trapz(tcurrent[i]/ICT_scale[i],t) for i in range(len(tcurrent))]
-                
-                f['/{}'.format(i)].attrs['charge'] = np.asfarray(charge)
-                
-                data.append(charge)
+                if overwrite:
+                    del f['/{}/'.format(i)].attrs['charge']
+                data.append(f['/{}/'.format(i)].attrs['charge'])
             except KeyError:
-                logging.warning('/{}/current not found in {}'.format(i,h5filename))
+                try:
+                    current = f['/{}/current'.format(i)][:]
+                    #logging.debug(current)
+                    #logging.debug(np.sum(current[1]))
+                    #threshold data
+                    t = current[0]
+                    current = -current[1:]
+                    tcurrent = []
 
-        if plotting:
-            fig,ax = plt.subplots()
-            for ele in tcurrent:
-                ax.plot(t,ele)
+                    #for ICT1 get FWHM size
+                    h,be = np.histogram(current[0][-1000:],bins=200)
+                    bc = (be[1:] + be[:-1]) / 2
+                    m = np.average(bc,weights=h)
+                    #tcurrent.append(current[0] - m)
+
+                    ICT1_fwhm = fwhm(current[0] - m)
+                    logging.debug(ICT1_fwhm)
                 
-        data = np.asfarray(data)
-        f.attrs['avg_charge'] = np.mean(data,axis=0) 
-        f.attrs['std_charge'] = np.std(data,axis=0)
+                    for c in current:
+                        if np.std(c) < 1.0e-10:
+                            tcurrent.append(0.0*c)
+                        else:
+                            #mask out the peak region to find the background
+                            peak_index = np.argmax(c)
+                            logging.debug(peak_index)
+                            n = np.arange(len(c))
+                            mask = np.where((n > peak_index - ICT1_fwhm*1.5)*(n < peak_index + ICT1_fwhm*3.5),0,1)
+                            anti_mask = -(mask-1)
+                            h,be = np.histogram(c*mask,bins=200)
+                            bc = (be[1:] + be[:-1]) / 2
+                            m = np.average(bc,weights=h)
+                            tcurrent.append((c - m)*anti_mask)
 
-def get_frame_charge(filename,frame_number=0,overwrite=False,plotting=False):
-    #avg_charge = utils.get_attr(filename,'avg_charge')
-    #if avg_charge or not overwrite:
-    #    charge = utils.get_attr(filename,'charge','/{}'.format(frame_number))
-    #else:
-    add_charge(filename,plotting)
-    charge = utils.get_attr(filename,'charge','/{}'.format(frame_number))
-    return charge
+                    
+                
+                    charge = [np.trapz(tcurrent[i]/ICT_scale[i],t) for i in range(len(tcurrent))]
+                
+                    f['/{}'.format(i)].attrs['charge'] = np.asfarray(charge)
+                
+                    data.append(charge)
+                except KeyError:
+                    logging.warning('/{}/current not found in {}'.format(i,h5filename))
 
-def get_file_charge(filename,overwrite=False):
-    avg_charge = utils.get_attr(filename,'avg_charge')
-    std_charge = utils.get_attr(filename,'std_charge')
-    return (avg_charge,std_charge)
+                if plotting:
+                    fig,ax = plt.subplots()
+                    for ele in tcurrent:
+                        ax.plot(t,ele)
 
-
+    return np.asfarray(data)
+                
+def calculate_charge_stats(h5filename,constraints=None):    
+    data = get_charge(h5filename,constraints=constraints,overwrite=True).T
+    means = []
+    stds = []
+    for ele in data:
+        means.append(np.mean(ele))
+        stds.append(np.std(ele))
+    with h5py.File(h5filename,'r+') as f:
+        f['/'].attrs['avg_charge'] = means
+        f['/'].attrs['std_charge'] = stds
+    return (means,stds)
+    
 
 #for use in utils.get_frames
 def mean_charge(f,ID,ICT_channel = 0):

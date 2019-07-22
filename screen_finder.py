@@ -11,7 +11,7 @@ from . import plotting
 class ScreenFinder:
     def __init__(self, filename):
         self.filename = filename
-        self.ax = plotting.plot_screen(self.filename).axes[0]
+        self.ax = plotting.plot_screen(self.filename)
         
         self.points = [[0,0]]
         self.line, = self.ax.plot(self.points[0][0],self.points[0][1],'+')

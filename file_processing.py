@@ -60,7 +60,7 @@ def process_folder(path,same_screen=False,**kwargs):
                 f.attrs['pixel_scale'] = 50.038e-3 / (screen_radius*2)
     else:
         for filename in dat_files:
-            h5_files.append(process_raw(filename,**kwargs))
+            h5_files.append(process_file(filename,**kwargs))
     
     return h5_files
 
@@ -106,20 +106,22 @@ def convert_to_h5(filename):
     logging.info('Done importing')    
     return None 
 
-def process_raw(filename,overwrite=False,skip_screen_finder=False,suppress_warning = False):
+def process_file(filename,overwrite=False,skip_screen_finder=False,suppress_warning = False):
     if not filename.split('.')[1] == 'dat':
         logging.error('filename {} not .dat file!'.format(filename))
         return None
     
     h5_filename = '{}.h5'.format(filename.split('.')[0])
     if not isfile(h5_filename) or overwrite:
-        if overwrite and isfile(h5_filename) and not suppress_warning:
+        if not suppress_warning:
             logging.warning('WARNING: About to overwrite h5 file {}, proceed with caution!!!! Press enter to confirm.'.format(h5_filename))
             input('----')
+        else:
+            pass
         convert_to_h5(filename)
         try:
             current.add_current(h5_filename)
-            current.add_charge(h5_filename)
+            #current.add_charge(h5_filename)
         except RuntimeError:
             pass
     logging.debug('searching for file ' + h5_filename)
@@ -134,12 +136,67 @@ def process_raw(filename,overwrite=False,skip_screen_finder=False,suppress_warni
     
 
     return h5_filename
-                
+
+def transpose_file(h5_filename):
+    #transpose all elements of file, need to do every frame to remain consistent
+    frames = utils.get_frames(h5_filename)
+    with h5py.File(h5_filename) as f:
+        #start by transposing any global attributes that need it
+        tlist = ['screen_center','beam_center','beam_matrix']
+        for ele in tlist:
+            try:
+                f.attrs[ele] = np.flipud(f.attrs[ele])
+            except KeyError:
+                pass
+
+        # flip dx,dy
+        dx = f.attrs['dx']
+        dy = f.attrs['dy']
+        f.attrs['dx'] = dy
+        f.attrs['dy'] = dx
+
+        #transpose raw and img arrays - must delete them, cannot reshape
+        for i in frames:
+            logging.debug('transposing frame {}'.format(i))
+            img = '/{}/img'.format(i)
+            raw = '/{}/raw'.format(i)
+            img_data = f[img][:]
+            raw_data = f[raw][:]
+
+            del f[img]
+            del f[raw]
+
+            f.create_dataset(img,data = img_data.T)
+            f.create_dataset(raw,data = raw_data.T)
+
+        #transpose background
+        background_data = f['background'][:]
+        del f['background']
+        f.create_dataset('background',data =  background_data.T)
+
+        #set flag
+        f.attrs['transposed'] = 1
+
+def add_background(h5_filename,background_filename,overwrite=False):
+    background = np.loadtxt(background_filename)
+
+    with h5py.File(h5_filename) as f:
+        try:
+            f['background']
+            if overwrite:
+                del f['background']
+                dset = f.create_dataset('background',data = background)
+                dset.attrs['source'] = background_filename
+        except KeyError:
+            dset = f.create_dataset('background',data = background)
+            dset.attrs['source'] = background_filename
+            
 def get_files(path):
     files = [f for f in listdir(path) if isfile(join(path,f))]
     dat_files = [join(path,f) for f in files if '.dat' in f]
     return dat_files
-    
+
+
 if __name__=='__main__':
     logging.basicConfig(level=logging.DEBUG)
     process('10_17/',rewrite_stat=False)
