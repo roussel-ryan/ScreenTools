@@ -188,7 +188,10 @@ def get_averaged_projection(filename,axis=0,constraints=None):
     
     data = []
     for i in frames:
-        data.append(get_projection(filename,frame_number=i,axis=axis))
+        proj = get_projection(filename,frame_number=i,axis=axis)
+        logging.debug('frame {} line length:{}'.format(i,len(proj)))
+        data.append(proj)
+
     data = np.vstack(data)
     avg = np.mean(data,axis=0)
     std = np.std(data,axis=0)
@@ -217,7 +220,9 @@ def get_averaged_mean_line(filename,constraints=None,axis=0,frames=''):
     #mean_lines = get_mean_line(filename,frames[0],axis=axis)[1]
     mean_lines = []
     for frame in frames:
-        mean_lines.append(get_mean_line(filename,frame,axis=axis))
+        line = get_mean_line(filename,frame,axis=axis)
+        logging.debug('frame {} mean line length: {}'.format(frame,len(line)))
+        mean_lines.append(line)
 
     ml = np.ma.vstack(mean_lines)
     mean_ml = np.ma.mean(ml,axis=0)

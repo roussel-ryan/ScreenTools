@@ -96,6 +96,7 @@ def plot_screen(filename,raw=False,frame_number=0,ax=None,scaled=False,normalize
         ax.set_xlabel('x [m]')
         ax.set_ylabel('y [m]')
         ax.scaled = True
+        ax.px_scale = px_scale
     else:
         ax.imshow(data,origin='lower',**kwargs)
         ax.scaled = False
@@ -259,22 +260,45 @@ def add_ellipse(ax):
     ell.set_linewidth(1)
     ax.add_artist(ell)
 
-def add_meanline(ax,axis=0):
+def add_meanline(ax,axis=0,test=False,**kwargs):
     filename = ax.filename
     frame_number = ax.frame_number
     extent = ax.get_images()[0].get_extent()
+    try:
+        px_scale = ax.px_scale
+    except:
+        px_scale = 1
     xlim = extent[:2]
     ylim = extent[2:]
     xext = xlim[1] - xlim[0]
     yext = ylim[1] - ylim[0]
 
     line = analysis.get_mean_line(filename,frame_number,axis=axis)
-    line = line/len(line)
+    line = line
+    logging.debug(extent)
     
-    if axis:
-        ax.plot(line[1]*xext + xlim[0],line[0]*yext + ylim[0])
-    else:
-        ax.plot(line[0]*xext + xlim[0],line[1]*yext + ylim[0])
+    if test: fig,ax2 = plt.subplots()
+
+    if axis == 0:
+        ext = ylim[1] - ylim[0]
+        if test:
+            ax2.plot(np.linspace(*xlim,len(line)),line*px_scale + ylim[0],**kwargs)
+        ax.plot(np.linspace(*xlim,len(line)),line*px_scale + ylim[0],**kwargs)
+    elif axis == 1:
+        ext = xlim[1] - xlim[0]
+        if test:
+            ax2.plot(line*px_scale + xlim[0],np.linspace(*ylim,len(line)),**kwargs)
+        ax.plot(line*px_scale + xlim[0],np.linspace(*ylim,len(line)),**kwargs)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    #if test:
+    #    fig,ax2 = plt.subplots()
+    #    logging.info(line)
+    #    if axis:
+    #        ax2.plot(line[1],line[0])
+    #    else:
+    #        ax2.plot(line[0],line[1])
 
     #ax.set_ylim(ylim)
     #ax.set_xlim(xlim)

@@ -159,14 +159,13 @@ def filter_frame(h5file,frame_number):
             dataset[...] = narray
             dataset.attrs['filtered'] = 1
     
-def filter_file(h5file):
+def filter(h5file,frame_number=-1):
     '''filtering'''
-    if not utils.get_attr(h5file,'filtered',dataset='/img/0'):
-        logging.info('applying median filter to file {}'.format(h5file))
-
-        for i in utils.get_frames(h5file):
-            logging.debug('filtering frame {}'.format(i))
-            filter_frame(h5file,i)
+    frames = utils.check_frame_number(h5file,frame_number)
+    
+    for i in frames:
+        logging.debug('filtering frame {}'.format(i))
+        filter_frame(h5file,i)
                 
 def reset(h5file,frame_number=-1):
     frames = utils.check_frame_number(h5file,frame_number)

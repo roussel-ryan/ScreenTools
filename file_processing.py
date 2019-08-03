@@ -44,7 +44,7 @@ def process_folder(path,same_screen=False,**kwargs):
     h5_files = []
     if same_screen:
         logging.info('running {} processing in scame_screen mode,warings suppressed for extra files'.format(path))
-        h5_files.append(process_raw(dat_files[0],skip_screen_finder = False,\
+        h5_files.append(process_file(dat_files[0],skip_screen_finder = False,\
                                     **kwargs))
         with h5py.File(h5_files[0]) as f:
             screen_center = f.attrs['screen_center']
@@ -52,7 +52,7 @@ def process_folder(path,same_screen=False,**kwargs):
         
         
         for filename in dat_files[1:]:
-            h5_files.append(process_raw(filename,skip_screen_finder=True,\
+            h5_files.append(process_file(filename,skip_screen_finder=True,\
                                         suppress_warning = True,**kwargs))
             with h5py.File(h5_files[-1]) as f:
                 f.attrs['screen_center'] = screen_center

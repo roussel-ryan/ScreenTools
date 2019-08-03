@@ -45,8 +45,10 @@ def get_scan_data(path,Bp,current_to_gradient_func,constraints = None,overwrite=
     #get files and extact quad gradients
     files = utils.get_files(path,'.h5')
     quad_currents = []
+    logging.info(files)
     for ele in files:
-        quad_currents.append(ele.split(base_filename[0])[1].split(base_filename[1])[0].replace('_','.'))
+        quad_currents.append(ele.split('/')[-1].split(base_filename[0])[1].split(base_filename[1])[0].replace('_','.'))
+    logging.info(quad_currents)
     sort_index = np.argsort(np.asfarray(quad_currents))
     logging.debug(sort_index)
     files = np.array(files)[sort_index]
@@ -65,11 +67,11 @@ def get_scan_data(path,Bp,current_to_gradient_func,constraints = None,overwrite=
                 s.append((curr,*stats[1][3]))
             else:
                 s.append((curr,*stats[1][0]))
-        except RuntimeError:
+        except (KeyError,RuntimeError):
             pass
 
     s = np.asfarray(s).T
-
+    logging.info(s)
     if reverse_polarity:
         p = -1.0
     else:
@@ -84,6 +86,23 @@ def get_scan_data(path,Bp,current_to_gradient_func,constraints = None,overwrite=
     if save_points:
         np.savetxt(path + 'quad_scan_{}.txt'.format(n[axis]),result)
     return result
+
+def plot_screens(path,base_filename = ('QUADSCAN_','_img.h5')):
+    files = utils.get_files(path,'.h5')
+    quad_currents = []
+    logging.info(files)
+    for ele in files:
+        quad_currents.append(ele.split('/')[-1].split(base_filename[0])[1].split(base_filename[1])[0].replace('_','.'))
+    logging.info(quad_currents)
+    sort_index = np.argsort(np.asfarray(quad_currents))
+    logging.debug(sort_index)
+    files = np.array(files)[sort_index]
+
+    fig,axs = plt.subplots(2,int(len(files)/2))
+    axes = [item for sub in axs for item in sub]
+
+    for f,ax in zip(files,axes):
+        plotting.plot_screen(f,ax=ax)
 
 def fit(s,L,l,bounds=None,plotting=False,axis=0):
     f = FitFunction(L,l,axis)
